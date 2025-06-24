@@ -11,6 +11,20 @@ service cloud.firestore {
       allow read, create, update: if request.auth != null && request.auth.uid == userId;
     }
 
+    // Rules for the 'usernames' collection to enforce uniqueness
+    match /usernames/{username} {
+      // A user can read any username document to check for existence
+      allow read: if true;
+      // A user can create a username document if it doesn't exist yet
+      // and they are setting the UID to their own
+      allow create: if request.auth != null
+                    && !exists(/databases/$(database)/documents/usernames/$(username))
+                    && request.resource.data.uid == request.auth.uid;
+      // A user can delete their own username document
+      allow delete: if request.auth != null
+                    && resource.data.uid == request.auth.uid;
+    }
+
     // Add rules for other collections as you build them
     // For example, allow any authenticated user to interact with chats
     match /chats/{chatId}/{document=**} {
