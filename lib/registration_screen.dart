@@ -1,66 +1,52 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'registration_screen.dart';
 
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+class RegistrationScreen extends StatefulWidget {
+  const RegistrationScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<RegistrationScreen> createState() => _RegistrationScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _RegistrationScreenState extends State<RegistrationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _confirmPasswordController = TextEditingController();
   bool _isLoading = false;
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
-  Future<void> _login() async {
-    // 1. Validate the form
+  Future<void> _register() async {
     if (!_formKey.currentState!.validate()) {
-      return; // If form is not valid, do nothing
+      return;
     }
-  
-    // 2. Show a loading indicator
+
     setState(() {
       _isLoading = true;
     });
-  
+
     try {
-      // 3. Sign in with Firebase
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
+      await FirebaseAuth.instance.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-  
-      // After successful login, you can navigate to the home screen
-      // For now, we'll just print a success message.
-      // Important: check if the widget is still in the tree
-      if (mounted) {
-         // Navigate to your home screen or show success
-         print("Login Successful!");
-         // Example of navigation:
-         // Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => HomeScreen()));
-      }
-  
+      // The AuthWrapper will handle navigation on successful registration.
     } on FirebaseAuthException catch (e) {
-      // 4. Handle Firebase errors
       String message;
-      if (e.code == 'user-not-found') {
-        message = 'No user found for that email.';
-      } else if (e.code == 'wrong-password') {
-        message = 'Wrong password provided.';
+      if (e.code == 'weak-password') {
+        message = 'The password provided is too weak.';
+      } else if (e.code == 'email-already-in-use') {
+        message = 'An account already exists for that email.';
       } else {
         message = 'An error occurred. Please try again.';
       }
-  
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -70,7 +56,6 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      // 5. Hide loading indicator
       if (mounted) {
         setState(() {
           _isLoading = false;
@@ -81,11 +66,17 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Access theme data for cleaner code
     final theme = Theme.of(context);
 
     return Scaffold(
-      // The background color is now set by the theme
+      appBar: AppBar(
+        title: const Text('Create Account'),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: BackButton(
+          color: theme.colorScheme.onSurface,
+        ),
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -94,17 +85,11 @@ class _LoginScreenState extends State<LoginScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-	        Image.asset(
-                  'assets/images/logo.png', // Make sure you have this asset
-                  height: 100,
-                  // If you don't have a logo, comment out this line
-                ),
-                // Text now uses the theme's default text styles
                 Text(
-                  'Welcome to TenorWisp!',
+                  'Join TenorWisp',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
                 const SizedBox(height: 48),
@@ -112,7 +97,6 @@ class _LoginScreenState extends State<LoginScreen> {
                   key: _formKey,
                   child: Column(
                     children: [
-                      // TextFormField inherits styles from inputDecorationTheme
                       TextFormField(
                         controller: _emailController,
                         keyboardType: TextInputType.emailAddress,
@@ -142,33 +126,34 @@ class _LoginScreenState extends State<LoginScreen> {
                           return null;
                         },
                       ),
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _confirmPasswordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          hintText: 'Confirm your password',
+                          prefixIcon: Icon(Icons.lock_outline),
+                        ),
+                        validator: (value) {
+                          if (value != _passwordController.text) {
+                            return 'Passwords do not match';
+                          }
+                          return null;
+                        },
+                      ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                // ElevatedButton inherits styles from elevatedButtonTheme
                 ElevatedButton(
-                  onPressed: _isLoading ? null : _login,
+                  onPressed: _isLoading ? null : _register,
                   child: _isLoading
                       ? const SizedBox(
                           height: 24,
                           width: 24,
                           child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('Login'),
-                ),
-                const SizedBox(height: 16),
-                TextButton(
-                  onPressed: () {
-                    // Navigate to the RegistrationScreen
-                    Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const RegistrationScreen()),
-                    );
-                  },
-                  child: Text(
-                    "Don't have an account? Sign Up",
-                    style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                  ),
+                      : const Text('Register'),
                 ),
               ],
             ),
@@ -177,4 +162,4 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-}
+} 
