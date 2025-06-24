@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 
 class ChatScreen extends StatelessWidget {
-  const ChatScreen({super.key});
+  final String chatId;
+  final String recipientId;
+
+  const ChatScreen({
+    super.key,
+    required this.chatId,
+    required this.recipientId,
+  });
 
   // We will need to pass arguments here later, like the chat ID or recipient's UID.
 

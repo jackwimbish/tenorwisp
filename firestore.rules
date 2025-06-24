@@ -8,7 +8,37 @@ service cloud.firestore {
 
     // Allow users to read and write their own data in the 'users' collection
     match /users/{userId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == userId;
+      // Any authenticated user can read user documents (e.g., for searching)
+      allow read: if request.auth != null;
+      // A user can create their own document
+      allow create: if request.auth != null && request.auth.uid == userId;
+      // An update is allowed if any of the following are true:
+      // 1. You are updating your own document.
+      // 2. You are sending a friend request to another user.
+      // 3. The other user is accepting a friend request FROM you.
+      // 4. The other user is declining a friend request FROM you.
+      allow update: if request.auth != null && (
+        // 1. Updating your own document
+        request.auth.uid == userId ||
+        // 2. Sending a friend request
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendRequestsReceived']) &&
+          request.resource.data.friendRequestsReceived.size() == resource.data.get('friendRequestsReceived', []).size() + 1 &&
+          request.auth.uid in request.resource.data.friendRequestsReceived
+        ) ||
+        // 3. Other user is accepting your request
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasAll(['friends', 'friendRequestsSent']) &&
+          request.resource.data.diff(resource.data).affectedKeys().size() == 2 &&
+          request.auth.uid in resource.data.friendRequestsSent
+        ) ||
+        // 4. Other user is declining your request
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendRequestsSent']) &&
+          request.auth.uid in resource.data.friendRequestsSent &&
+          !(request.auth.uid in request.resource.data.friendRequestsSent)
+        )
+      );
     }
 
     // Rules for the 'usernames' collection to enforce uniqueness
