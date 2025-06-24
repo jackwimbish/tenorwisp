@@ -1,0 +1,10 @@
+repos:
+-   repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2 # Use the latest version of Gitleaks
+    hooks:
+    -   id: gitleaks
+        name: Detect hardcoded secrets
+        description: "Scans for hardcoded secrets, like API keys."
+        entry: gitleaks protect --staged --verbose
+        language: golang
+        stages: [commit]
