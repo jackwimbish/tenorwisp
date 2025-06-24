@@ -1,6 +1,7 @@
 // lib/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'account_screen.dart'; // <-- Import the new AccountScreen
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -14,14 +15,15 @@ class HomeScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('TenorWisp Home'),
         actions: [
-          // Logout Button
+          // Account Button
           IconButton(
-            icon: const Icon(Icons.logout),
+            icon: const Icon(Icons.account_circle),
             onPressed: () {
-              FirebaseAuth.instance.signOut();
-              // The authStateChanges() stream will automatically handle navigation
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const AccountScreen()),
+              );
             },
-            tooltip: 'Logout',
+            tooltip: 'My Account',
           ),
         ],
       ),
