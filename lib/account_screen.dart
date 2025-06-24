@@ -36,13 +36,18 @@ class _AccountScreenState extends State<AccountScreen> {
     });
 
     try {
-      final usernameDoc = await FirebaseFirestore.instance.collection('usernames').doc(newUsername).get();
+      final usernameDoc = await FirebaseFirestore.instance
+          .collection('usernames')
+          .doc(newUsername)
+          .get();
 
       if (usernameDoc.exists) {
         throw Exception('Username is already taken.');
       }
 
-      final userDoc = FirebaseFirestore.instance.collection('users').doc(_user!.uid);
+      final userDoc = FirebaseFirestore.instance
+          .collection('users')
+          .doc(_user!.uid);
       final oldUserData = (await userDoc.get()).data();
       final oldUsername = oldUserData?['username'];
 
@@ -52,11 +57,16 @@ class _AccountScreenState extends State<AccountScreen> {
       batch.set(userDoc, {'username': newUsername}, SetOptions(merge: true));
 
       // Create new username document
-      batch.set(FirebaseFirestore.instance.collection('usernames').doc(newUsername), {'uid': _user!.uid});
+      batch.set(
+        FirebaseFirestore.instance.collection('usernames').doc(newUsername),
+        {'uid': _user!.uid},
+      );
 
       // Delete old username document if it exists
       if (oldUsername != null) {
-        batch.delete(FirebaseFirestore.instance.collection('usernames').doc(oldUsername));
+        batch.delete(
+          FirebaseFirestore.instance.collection('usernames').doc(oldUsername),
+        );
       }
 
       await batch.commit();
@@ -67,9 +77,8 @@ class _AccountScreenState extends State<AccountScreen> {
         );
         _usernameController.clear();
       }
-
     } catch (e) {
-      if(mounted) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to update username: ${e.toString()}')),
         );
@@ -104,20 +113,19 @@ class _AccountScreenState extends State<AccountScreen> {
       final url = await ref.getDownloadURL();
 
       await _user!.updatePhotoURL(url);
-      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).set(
-        {'photoURL': url},
-        SetOptions(merge: true),
-      );
+      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).set({
+        'photoURL': url,
+      }, SetOptions(merge: true));
 
       // No need to call setState here as the StreamBuilder will handle it
     } catch (e) {
-      if(mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload image: $e')),
-        );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
       }
     } finally {
-      if(mounted) {
+      if (mounted) {
         setState(() {
           _isUploading = false;
         });
@@ -125,119 +133,61 @@ class _AccountScreenState extends State<AccountScreen> {
     }
   }
 
+  Future<void> _logout(BuildContext context) async {
+    try {
+      await FirebaseAuth.instance.signOut();
+      // The AuthWrapper will automatically navigate to the LoginScreen.
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to log out: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('My Account'),
-      ),
-      body: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-        stream: FirebaseFirestore.instance.collection('users').doc(_user?.uid).snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.hasError) {
-            return const Center(child: Text('Something went wrong!'));
-          }
-
-          final userData = snapshot.data?.data();
-          final username = userData?['username'] as String?;
-          final photoURL = userData?['photoURL'] as String?;
-
-          return Center(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    Stack(
-                      alignment: Alignment.bottomRight,
-                      children: [
-                        CircleAvatar(
-                          radius: 60,
-                          backgroundColor: theme.colorScheme.surfaceVariant,
-                          backgroundImage: (photoURL != null && !photoURL.contains('dicebear.com'))
-                            ? NetworkImage(photoURL)
-                            : null,
-                          child: (photoURL != null && photoURL.contains('dicebear.com'))
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(60),
-                                child: SvgPicture.network(
-                                  photoURL,
-                                  fit: BoxFit.cover,
-                                  placeholderBuilder: (context) => const CircularProgressIndicator(),
-                                ),
-                              )
-                            : (photoURL == null ? const Icon(Icons.person, size: 60) : null),
-                        ),
-                        if (_isUploading)
-                          const CircularProgressIndicator()
-                        else
-                          IconButton(
-                            icon: const Icon(Icons.edit),
-                            onPressed: _pickAndUploadImage,
-                            style: IconButton.styleFrom(
-                              backgroundColor: theme.colorScheme.primary,
-                              foregroundColor: theme.colorScheme.onPrimary,
-                            ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    Text(
-                      username ?? _user?.email ?? 'No email available',
-                      style: theme.textTheme.headlineSmall,
-                    ),
-                    if (username == null)
-                      Text(
-                        _user?.email ?? '',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    const SizedBox(height: 32),
-                    
-                    // Username form
-                    TextFormField(
-                      controller: _usernameController,
-                      decoration: InputDecoration(
-                        labelText: 'Set new username',
-                        hintText: 'Enter a unique username',
-                        suffixIcon: _isSavingUsername
-                          ? const Padding(
-                              padding: EdgeInsets.all(8.0),
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : IconButton(
-                              icon: const Icon(Icons.save),
-                              onPressed: _updateUsername,
-                            ),
-                      ),
-                    ),
-                    
-                    const SizedBox(height: 48),
-                    ElevatedButton.icon(
-                      icon: const Icon(Icons.logout),
-                      label: const Text('Log Out'),
-                      onPressed: () {
-                        FirebaseAuth.instance.signOut();
-                        Navigator.of(context).popUntil((route) => route.isFirst);
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.colorScheme.error,
-                        foregroundColor: theme.colorScheme.onError,
-                      ),
-                    ),
-                  ],
+      body: ListView(
+        children: [
+          const SizedBox(height: 20),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text('Edit Profile'),
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Edit Profile is not yet implemented.'),
                 ),
-              ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Change Password'),
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Change Password is not yet implemented.'),
+                ),
+              );
+            },
+          ),
+          const Divider(height: 40),
+          ListTile(
+            leading: Icon(Icons.logout, color: theme.colorScheme.error),
+            title: Text(
+              'Logout',
+              style: TextStyle(color: theme.colorScheme.error),
             ),
-          );
-        },
+            onTap: () => _logout(context),
+          ),
+        ],
       ),
     );
   }
-} 
+}

@@ -5,6 +5,7 @@ import 'firebase_options.dart';
 import 'app_theme.dart';
 import 'login_screen.dart';
 import 'home_screen.dart'; // <-- Import your new HomeScreen
+import 'main_app_shell.dart'; // <-- Import the new main app shell
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,8 +60,8 @@ class AuthWrapper extends StatelessWidget {
         // 3. Auth state logic
         if (snapshot.hasData) {
           // If snapshot.hasData is true, it means the stream has a User object
-          // So, the user is logged in. Show the HomeScreen.
-          return const HomeScreen();
+          // So, the user is logged in. Show the MainAppShell.
+          return const MainAppShell();
         } else {
           // If snapshot.hasData is false, the user is logged out.
           // Show the LoginScreen.
