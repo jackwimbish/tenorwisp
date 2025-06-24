@@ -5,6 +5,7 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'friends_screen.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -153,6 +154,17 @@ class _AccountScreenState extends State<AccountScreen> {
       body: ListView(
         children: [
           const SizedBox(height: 20),
+          ListTile(
+            leading: const Icon(Icons.people_outline),
+            title: const Text('Friends'),
+            trailing: const Icon(Icons.arrow_forward_ios),
+            onTap: () {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const FriendsScreen()));
+            },
+          ),
+          const Divider(),
           ListTile(
             leading: const Icon(Icons.edit_outlined),
             title: const Text('Edit Profile'),

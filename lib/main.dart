@@ -9,9 +9,7 @@ import 'main_app_shell.dart'; // <-- Import the new main app shell
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const MyApp());
 }
 
@@ -42,18 +40,14 @@ class AuthWrapper extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           // If the connection is waiting, show a loading indicator
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
-        
+
         // 2. Error handling
         if (snapshot.hasError) {
           return const Scaffold(
-            body: Center(
-              child: Text('Something went wrong!'),
-            ),
+            body: Center(child: Text('Something went wrong!')),
           );
         }
 
