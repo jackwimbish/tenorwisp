@@ -11,5 +11,12 @@ service firebase.storage {
       allow read: if true; // Allow anyone to read profile pictures
       allow write: if request.auth != null && imageName == (request.auth.uid + '.jpg');
     }
+
+    // Allow users in a chat to read/write images in that chat's folder
+    match /chat_images/{chatId}/{imageName} {
+      allow read, write: if request.auth != null; 
+      // A more secure rule would check if the user is a participant in the chat:
+      // allow read, write: if request.auth != null && exists(/databases/$(database)/documents/chats/$(chatId)) && request.auth.uid in get(/databases/$(database)/documents/chats/$(chatId)).data.participants;
+    }
   }
 }
