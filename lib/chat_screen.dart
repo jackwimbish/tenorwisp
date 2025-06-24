@@ -5,6 +5,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 
+import 'package:tenorwisp/chat_bubble.dart';
+
 class ChatScreen extends StatefulWidget {
   final String chatId;
   final String recipientId;
@@ -23,58 +25,90 @@ class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _currentUser = FirebaseAuth.instance.currentUser;
 
-  Future<void> _pickAndUploadImage() async {
-    final picker = ImagePicker();
-    final source = await showModalBottomSheet<ImageSource>(
+  Future<void> _pickMedia() async {
+    final source = await showModalBottomSheet<String>(
       context: context,
-      builder: (BuildContext context) {
-        return SafeArea(
-          child: Wrap(
-            children: <Widget>[
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Choose from Library'),
-                onTap: () => Navigator.pop(context, ImageSource.gallery),
-              ),
-              ListTile(
-                leading: const Icon(Icons.camera_alt),
-                title: const Text('Take Photo'),
-                onTap: () => Navigator.pop(context, ImageSource.camera),
-              ),
-            ],
-          ),
-        );
-      },
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Choose Photo'),
+              onTap: () => Navigator.of(context).pop('gallery_photo'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Take Photo'),
+              onTap: () => Navigator.of(context).pop('camera_photo'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.videocam),
+              title: const Text('Record Video'),
+              onTap: () => Navigator.of(context).pop('camera_video'),
+            ),
+          ],
+        ),
+      ),
     );
 
     if (source == null) return;
 
-    final pickedFile = await picker.pickImage(source: source);
-
-    if (pickedFile == null) return;
-
-    final file = File(pickedFile.path);
-    final fileName =
-        '${DateTime.now().millisecondsSinceEpoch}_${_currentUser?.uid}.jpg';
-    final destination = 'chat_images/${widget.chatId}/$fileName';
+    final picker = ImagePicker();
+    XFile? pickedFile;
 
     try {
-      final ref = FirebaseStorage.instance.ref(destination);
-      await ref.putFile(file);
-      final imageUrl = await ref.getDownloadURL();
-      await _sendMessage(imageUrl: imageUrl);
+      if (source == 'gallery_photo') {
+        pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      } else if (source == 'camera_photo') {
+        pickedFile = await picker.pickImage(source: ImageSource.camera);
+      } else if (source == 'camera_video') {
+        pickedFile = await picker.pickVideo(
+          source: ImageSource.camera,
+          maxDuration: const Duration(seconds: 60),
+        );
+      }
+
+      if (pickedFile != null) {
+        await _uploadMedia(pickedFile);
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload image: ${e.toString()}')),
+          SnackBar(content: Text('Failed to pick media: ${e.toString()}')),
         );
       }
     }
   }
 
-  Future<void> _sendMessage({String? imageUrl}) async {
+  Future<void> _uploadMedia(XFile file) async {
+    final isVideo = file.path.toLowerCase().endsWith('.mp4');
+    final fileToUpload = File(file.path);
+    final fileExtension = isVideo ? 'mp4' : 'jpg';
+    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
+    final destination =
+        'chat_media/${widget.chatId}/${_currentUser?.uid}/$fileName';
+
+    try {
+      final ref = FirebaseStorage.instance.ref(destination);
+      await ref.putFile(fileToUpload);
+      final downloadUrl = await ref.getDownloadURL();
+      if (isVideo) {
+        await _sendMessage(videoUrl: downloadUrl);
+      } else {
+        await _sendMessage(imageUrl: downloadUrl);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload media: ${e.toString()}')),
+        );
+      }
+    }
+  }
+
+  Future<void> _sendMessage({String? imageUrl, String? videoUrl}) async {
     final messageText = _messageController.text.trim();
-    if (messageText.isEmpty && imageUrl == null) {
+    if (messageText.isEmpty && imageUrl == null && videoUrl == null) {
       return; // Don't send empty messages
     }
     _messageController.clear();
@@ -83,6 +117,7 @@ class _ChatScreenState extends State<ChatScreen> {
       'senderId': _currentUser?.uid,
       'text': imageUrl == null ? messageText : null,
       'imageUrl': imageUrl,
+      'videoUrl': videoUrl,
       'timestamp': FieldValue.serverTimestamp(),
     };
 
@@ -98,6 +133,11 @@ class _ChatScreenState extends State<ChatScreen> {
         .collection('chats')
         .doc(widget.chatId)
         .update({
+          'lastMessage': imageUrl != null
+              ? '📷 Image'
+              : videoUrl != null
+              ? '📹 Video'
+              : messageText,
           'lastMessage': imageUrl != null ? '📷 Image' : messageText,
           'lastMessageTimestamp': FieldValue.serverTimestamp(),
         });
@@ -128,41 +168,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   reverse: true, // Show latest messages at the bottom
                   itemCount: messages.length,
                   itemBuilder: (context, index) {
-                    final message =
-                        messages[index].data() as Map<String, dynamic>;
+                    final messageDoc = messages[index];
+                    final message = messageDoc.data() as Map<String, dynamic>;
                     final bool isMe = message['senderId'] == _currentUser?.uid;
-                    final imageUrl = message['imageUrl'] as String?;
 
-                    // A simple chat bubble
-                    return Align(
-                      alignment: isMe
-                          ? Alignment.centerRight
-                          : Alignment.centerLeft,
-                      child: Container(
-                        margin: const EdgeInsets.symmetric(
-                          vertical: 4,
-                          horizontal: 8,
-                        ),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: isMe
-                              ? Theme.of(context).colorScheme.primary
-                              : Theme.of(context).colorScheme.secondary,
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: imageUrl != null
-                            ? Image.network(imageUrl, width: 200)
-                            : Text(
-                                message['text'] ?? '',
-                                style: TextStyle(
-                                  color: isMe
-                                      ? Theme.of(context).colorScheme.onPrimary
-                                      : Theme.of(
-                                          context,
-                                        ).colorScheme.onSecondary,
-                                ),
-                              ),
-                      ),
+                    return ChatBubble(
+                      key: ValueKey(
+                        messageDoc.id,
+                      ), // Use message ID as a unique key
+                      text: message['text'],
+                      imageUrl: message['imageUrl'],
+                      videoUrl: message['videoUrl'],
+                      isMe: isMe,
                     );
                   },
                 );
@@ -176,7 +193,7 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 IconButton(
                   icon: const Icon(Icons.attach_file),
-                  onPressed: _pickAndUploadImage,
+                  onPressed: _pickMedia,
                 ),
                 Expanded(
                   child: TextField(
