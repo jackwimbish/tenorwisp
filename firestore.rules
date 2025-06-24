@@ -1,0 +1,20 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // By default, deny all reads and writes
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Allow users to read and write their own data
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Add rules for other collections as you build them
+    // For example, allow any authenticated user to interact with chats
+    match /chats/{chatId}/{document=**} {
+      allow read, write: if request.auth != null;
+    }
+  }
+}

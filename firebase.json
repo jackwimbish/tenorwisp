@@ -1,1 +1,30 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"tenorwisp","appId":"1:508976043147:android:6e795a2218a51c2d12308e","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"tenorwisp","configurations":{"android":"1:508976043147:android:6e795a2218a51c2d12308e"}}}}}}
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "tenorwisp",
+          "appId": "1:508976043147:android:6e795a2218a51c2d12308e",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "tenorwisp",
+          "configurations": {
+            "android": "1:508976043147:android:6e795a2218a51c2d12308e"
+          }
+        }
+      }
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "nam5",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  }
+}
