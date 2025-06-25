@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "508976043147",
+    "project_id": "tenorwisp",
+    "storage_bucket": "tenorwisp.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:508976043147:android:6e795a2218a51c2d12308e",
+        "android_client_info": {
+          "package_name": "com.example.tenorwisp"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "REPLACE_WITH_YOUR_API_KEY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
