@@ -1,5 +1,7 @@
+import 'dart:io';
 import 'package:chewie/chewie.dart';
 import 'package:flutter/material.dart';
+import 'package:tenorwisp/services/video_cache_service.dart';
 import 'package:video_player/video_player.dart';
 
 class VideoPlayerWidget extends StatefulWidget {
@@ -12,19 +14,31 @@ class VideoPlayerWidget extends StatefulWidget {
 }
 
 class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
-  late VideoPlayerController _videoPlayerController;
-  late ChewieController _chewieController;
-  late Future<void> _initializeVideoPlayerFuture;
+  final VideoCacheService _cacheService = VideoCacheService();
+  late Future<void> _initializeControllerFuture;
+  ChewieController? _chewieController;
 
   @override
   void initState() {
     super.initState();
-    _videoPlayerController = VideoPlayerController.networkUrl(
-      Uri.parse(widget.videoUrl),
+    _initializeControllerFuture = _initializeController();
+  }
+
+  Future<void> _initializeController() async {
+    // Get the cached video file using our new service
+    final File videoFile = await _cacheService.getCachedVideoFile(
+      widget.videoUrl,
     );
-    _initializeVideoPlayerFuture = _videoPlayerController.initialize();
+
+    // Create a controller from the local file
+    final videoPlayerController = VideoPlayerController.file(videoFile);
+
+    // Initialize the controller
+    await videoPlayerController.initialize();
+
+    // Create the Chewie controller once the video is ready
     _chewieController = ChewieController(
-      videoPlayerController: _videoPlayerController,
+      videoPlayerController: videoPlayerController,
       autoPlay: false,
       looping: false,
     );
@@ -32,24 +46,37 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
 
   @override
   void dispose() {
-    _videoPlayerController.dispose();
-    _chewieController.dispose();
+    // The ChewieController will handle disposing the VideoPlayerController
+    _chewieController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return FutureBuilder(
-      future: _initializeVideoPlayerFuture,
+      future: _initializeControllerFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
           if (snapshot.hasError) {
-            return const Center(child: Text('Could not play video.'));
+            debugPrint("Error initializing video player: ${snapshot.error}");
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, color: Colors.red, size: 48),
+                  SizedBox(height: 8),
+                  Text('Could not play video.'),
+                ],
+              ),
+            );
           }
-          return AspectRatio(
-            aspectRatio: _videoPlayerController.value.aspectRatio,
-            child: Chewie(controller: _chewieController),
-          );
+          if (_chewieController != null) {
+            return AspectRatio(
+              aspectRatio:
+                  _chewieController!.videoPlayerController.value.aspectRatio,
+              child: Chewie(controller: _chewieController!),
+            );
+          }
         }
         return const Center(child: CircularProgressIndicator());
       },
