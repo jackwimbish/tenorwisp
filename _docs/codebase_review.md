@@ -1,50 +1,60 @@
-# Codebase Review
+# Codebase Review (Updated)
 
-This document provides a high-level overview and review of the TenorWisp Flutter application codebase.
+This document provides a high-level overview and review of the TenorWisp Flutter application codebase, reflecting the current state of development.
 
-## 1. Project Structure & Technology
+## 1. Core App Concept
 
-The project follows a standard Flutter layout, which is clean and well-organized. The core application logic resides in the `lib/` directory.
+TenorWisp is a mobile messaging application built with Flutter and Firebase. The core concept has been refined to focus on private, one-on-one direct messaging. The application now supports real-time text, image, and video communication between users who have added each other as friends.
+
+## 2. Project Structure & Technology
+
+The project follows a standard Flutter layout. The core application logic resides in the `lib/` directory. The initial 3-tab navigation was refactored into a 2-tab system (`MainAppShell`) focusing on "Chats" and "Account".
 
 - **Framework:** Flutter
 - **Language:** Dart
-- **Backend:** Firebase
-  - `firebase_core`: For Firebase initialization.
-  - `firebase_auth`: For user authentication.
-  - `cloud_firestore`: For the database.
-  - `firebase_storage`: For file storage (e.g., images/videos).
+- **Backend:** Firebase (Authentication, Cloud Firestore, Cloud Storage)
 - **Key Dependencies:**
-  - `image_picker`: Suggests functionality for selecting media from the user's device.
-  - `flutter_svg`: For using SVG images.
+  - `firebase_core`, `firebase_auth`, `cloud_firestore`, `firebase_storage`
+  - `image_picker`: For selecting images and videos from the user's device.
+  - `video_player` & `chewie`: For in-app video playback.
 
-## 2. Key Files
+- **Key Files:**
+  - **`lib/main.dart`**: The application's entry point, handling Firebase initialization and routing via the `AuthWrapper`.
+  - **`lib/app_theme.dart`**: Centralized theme file for a consistent UI.
+  - **`lib/main_app_shell.dart`**: The main UI shell after login, containing the `BottomNavigationBar` for "Chats" and "Account" screens.
+  - **`lib/users_list_screen.dart`**: The "Chats" tab, which now displays the current user's list of friends. Tapping a friend initiates a chat.
+  - **`lib/friends_screen.dart` & `lib/add_friend_screen.dart`**: Screens that manage the friend system, allowing users to view their friends, accept/decline requests, and search for new users to add.
+  - **`lib/chat_screen.dart`**: The core messaging UI where users exchange real-time messages.
+  - **`lib/chat_bubble.dart`**: A custom widget for displaying individual chat messages, with logic to handle text, images, and video playback.
+  - **`firestore.rules` & `storage.rules`**: These files have been iteratively developed to provide secure access for the implemented chat and friend features.
 
-- **`lib/main.dart`**: This is the application's entry point. It correctly initializes Firebase and sets up the `AuthWrapper` as the initial widget. The `AuthWrapper` uses a `StreamBuilder` to listen to `FirebaseAuth.instance.authStateChanges()`, which is an efficient way to manage user authentication state and route users to either the `LoginScreen` or `HomeScreen`.
+## 3. Key Features Implemented
 
-- **`lib/app_theme.dart`**: A centralized theme file (`tenorWispTheme`) is used to maintain a consistent UI, which is excellent practice. It defines the color scheme and typography for the app.
+The application has evolved from a basic shell to a functional messaging prototype.
 
-- **`lib/login_screen.dart` & `lib/registration_screen.dart`**: These files contain the UI and logic for user authentication, handling both sign-in and new user sign-up.
+- **Friends Management System:** A complete friend system has been implemented.
+    - **Data Model:** User documents in Firestore contain `friends`, `friendRequestsSent`, and `friendRequestsReceived` arrays to manage relationships.
+    - **Functionality:** Users can search for other users by email, send friend requests, and accept or decline incoming requests.
 
-- **`lib/home_screen.dart`**: This is the main screen displayed after a user successfully logs in.
+- **Real-Time Direct Messaging:**
+    - **Text & Media:** The `ChatScreen` supports real-time text messaging and the sending of images and videos.
+    - **Backend:** A `chats` collection in Firestore stores message history. Each chat is a document containing a `messages` subcollection. Cloud Storage is used to store image and video files in a `chat_media/` directory, with messages in Firestore containing the corresponding storage URL.
+    - **UI:** A `StreamBuilder` listens for new messages in real-time. The `ChatBubble` widget dynamically displays content, embedding a `Chewie` video player for videos.
 
-- **`pubspec.yaml`**: The file is well-maintained, clearly defining project dependencies and assets like custom fonts and images.
+- **Security Rules:** The `firestore.rules` and `storage.rules` have been carefully crafted to enforce security. They prevent unauthorized data access while enabling the necessary functionality for searching users, managing friendships, and exchanging media only between authorized users.
 
-- **`firebase.json`, `firestore.rules`, `storage.rules`**: The presence of these files indicates that the Firebase backend is configured and deployed via the Firebase CLI, which is the standard approach.
-
-## 3. Overall Assessment
+## 4. Overall Assessment
 
 ### Strengths
-*   **Solid Foundation:** The project is built on a solid architectural foundation. The use of a reactive approach for auth handling (`StreamBuilder`) is a major plus.
-*   **Good Practices:** The codebase adheres to Flutter best practices, such as centralized theme management, proper asset declaration, and a logical separation of UI (screens) and services (Firebase).
-*   **Scalability:** The current structure is scalable and makes it easy to add new features and screens.
+*   **Functional Core:** The project has successfully implemented the most critical features of a messaging app: a friend system and real-time, media-rich chat.
+*   **Secure Backend:** Significant effort has been invested in writing robust Firebase security rules, which is crucial for a social application.
+*   **Good Architecture:** The component-based structure (e.g., `ChatBubble`, `MainAppShell`) and use of `StreamBuilder` for real-time data are effective and scalable.
 
 ### Areas for Improvement & Next Steps
-*   **Core Feature Implementation:** The foundation is in place. The next logical steps involve building out the core messaging features, which would include:
-    *   Creating a chat UI.
-    *   Integrating with Cloud Firestore to send and receive messages.
-    *   Using Cloud Storage to handle image and video sharing.
-*   **State Management:** For the current scope, `StatefulWidget` and `StreamBuilder` are perfectly adequate. However, as the app grows in complexity, consider adopting a more advanced state management solution like Provider or Riverpod to manage app state more effectively.
+*   **UX Enhancements:** The user experience can be greatly improved by adding features like read receipts, typing indicators, and user online/offline status.
+*   **Account Management:** The `AccountScreen` is currently a placeholder. It should be built out to allow users to update their profile picture, change their password, and log out.
+*   **Robustness:** Further work is needed on error handling (e.g., failed media uploads, network issues) and UI polish to create a more production-ready application.
 
-## 4. Conclusion
+## 5. Conclusion
 
-The TenorWisp codebase is in excellent shape. It's a well-structured, clean, and scalable project that demonstrates a strong understanding of Flutter and Firebase development. The project is well-prepared for the implementation of its core features. 
+The TenorWisp codebase has progressed significantly from a simple boilerplate to a functional prototype of a direct messaging application. The architecture is sound, and the implemented features are robust and secure. The project is in an excellent position to refine the user experience and add more features. 
