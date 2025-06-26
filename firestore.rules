@@ -71,6 +71,9 @@ service cloud.firestore {
 
       // Allow create if the user's UID is in the new message's participants list
       allow create: if request.auth.uid in request.resource.data.participants;
+
+      // Allow a participant to update a message (e.g. to add the media URL)
+      allow update: if request.auth.uid in resource.data.participants;
     }
   }
 }
