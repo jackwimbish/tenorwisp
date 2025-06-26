@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../services/auth_service.dart';
 
 class RegistrationScreen extends StatefulWidget {
   const RegistrationScreen({super.key});
@@ -16,6 +16,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
   final _confirmPasswordController = TextEditingController();
   final _usernameController = TextEditingController();
   bool _isLoading = false;
+  final AuthService _authService = AuthService();
 
   @override
   void dispose() {
@@ -35,48 +36,15 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       _isLoading = true;
     });
 
-    final newUsername = _usernameController.text.trim();
-
     try {
-      // 1. Check if username is already taken
-      final usernameDoc = await FirebaseFirestore.instance.collection('usernames').doc(newUsername).get();
-      if (usernameDoc.exists) {
-        throw Exception('Username is already taken.');
-      }
-
-      // 2. If username is available, create the user
-      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+      await _authService.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
+        username: _usernameController.text.trim(),
       );
 
-      // 3. Set up user data in a batched write
-      if (userCredential.user != null) {
-        final user = userCredential.user!;
-        final avatarUrl = 'https://api.dicebear.com/8.x/adventurer/svg?seed=${user.uid}';
-        
-        await user.updateDisplayName(newUsername);
-        await user.updatePhotoURL(avatarUrl);
-        
-        WriteBatch batch = FirebaseFirestore.instance.batch();
-
-        // Create user document
-        final userDocRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-        batch.set(userDocRef, {
-          'email': user.email,
-          'username': newUsername,
-          'photoURL': avatarUrl,
-        });
-
-        // Create username document for uniqueness
-        final usernameDocRef = FirebaseFirestore.instance.collection('usernames').doc(newUsername);
-        batch.set(usernameDocRef, {'uid': user.uid});
-
-        await batch.commit();
-
-        if (mounted) {
-          Navigator.of(context).popUntil((route) => route.isFirst);
-        }
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } on FirebaseAuthException catch (e) {
       String message;
@@ -85,7 +53,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       } else if (e.code == 'email-already-in-use') {
         message = 'An account already exists for that email.';
       } else {
-        message = 'An error occurred. Please try again.';
+        message = 'An error occurred during registration. Please try again.';
       }
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -95,7 +63,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+          SnackBar(
+            content: Text('An error occurred: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
         );
       }
     } finally {
@@ -116,9 +87,7 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
         title: const Text('Create Account'),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        leading: BackButton(
-          color: theme.colorScheme.onSurface,
-        ),
+        leading: BackButton(color: theme.colorScheme.onSurface),
       ),
       body: SafeArea(
         child: Center(
@@ -162,7 +131,8 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                           prefixIcon: Icon(Icons.email_outlined),
                         ),
                         validator: (value) {
-                          if (value == null || !RegExp(r'\S+@\S+\.\S+').hasMatch(value)) {
+                          if (value == null ||
+                              !RegExp(r'\S+@\S+\.\S+').hasMatch(value)) {
                             return 'Please enter a valid email address';
                           }
                           return null;
@@ -208,7 +178,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
                       ? const SizedBox(
                           height: 24,
                           width: 24,
-                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
                         )
                       : const Text('Register'),
                 ),
@@ -219,4 +192,4 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
       ),
     );
   }
-} 
+}

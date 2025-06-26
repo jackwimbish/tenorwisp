@@ -6,6 +6,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'friends_screen.dart';
+import 'package:tenorwisp/services/auth_service.dart';
+import 'package:tenorwisp/services/user_service.dart';
 
 class AccountScreen extends StatefulWidget {
   const AccountScreen({super.key});
@@ -17,6 +19,8 @@ class AccountScreen extends StatefulWidget {
 class _AccountScreenState extends State<AccountScreen> {
   final User? _user = FirebaseAuth.instance.currentUser;
   final _usernameController = TextEditingController();
+  final _authService = AuthService();
+  final _userService = UserService();
   bool _isUploading = false;
   bool _isSavingUsername = false;
 
@@ -37,40 +41,7 @@ class _AccountScreenState extends State<AccountScreen> {
     });
 
     try {
-      final usernameDoc = await FirebaseFirestore.instance
-          .collection('usernames')
-          .doc(newUsername)
-          .get();
-
-      if (usernameDoc.exists) {
-        throw Exception('Username is already taken.');
-      }
-
-      final userDoc = FirebaseFirestore.instance
-          .collection('users')
-          .doc(_user!.uid);
-      final oldUserData = (await userDoc.get()).data();
-      final oldUsername = oldUserData?['username'];
-
-      WriteBatch batch = FirebaseFirestore.instance.batch();
-
-      // Update username in user's document
-      batch.set(userDoc, {'username': newUsername}, SetOptions(merge: true));
-
-      // Create new username document
-      batch.set(
-        FirebaseFirestore.instance.collection('usernames').doc(newUsername),
-        {'uid': _user!.uid},
-      );
-
-      // Delete old username document if it exists
-      if (oldUsername != null) {
-        batch.delete(
-          FirebaseFirestore.instance.collection('usernames').doc(oldUsername),
-        );
-      }
-
-      await batch.commit();
+      await _userService.updateUsername(newUsername);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -105,20 +76,8 @@ class _AccountScreenState extends State<AccountScreen> {
 
     try {
       final file = File(pickedFile.path);
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('profile_pictures')
-          .child('${_user!.uid}.jpg');
-
-      await ref.putFile(file);
-      final url = await ref.getDownloadURL();
-
-      await _user!.updatePhotoURL(url);
-      await FirebaseFirestore.instance.collection('users').doc(_user!.uid).set({
-        'photoURL': url,
-      }, SetOptions(merge: true));
-
-      // No need to call setState here as the StreamBuilder will handle it
+      await _userService.updateProfilePicture(file);
+      // The StreamBuilder in the main app shell will update the UI.
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -136,7 +95,7 @@ class _AccountScreenState extends State<AccountScreen> {
 
   Future<void> _logout(BuildContext context) async {
     try {
-      await FirebaseAuth.instance.signOut();
+      await _authService.signOut();
       // The AuthWrapper will automatically navigate to the LoginScreen.
     } catch (e) {
       if (context.mounted) {

@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:tenorwisp/services/user_service.dart';
 
 class AddFriendScreen extends StatefulWidget {
   const AddFriendScreen({super.key});
@@ -11,35 +12,12 @@ class AddFriendScreen extends StatefulWidget {
 
 class _AddFriendScreenState extends State<AddFriendScreen> {
   final _searchController = TextEditingController();
+  final _userService = UserService();
   Future<QuerySnapshot>? _searchResultsFuture;
 
   Future<void> _sendFriendRequest(String recipientId) async {
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) return;
-
-    final currentUserUid = currentUser.uid;
-
     try {
-      // Use a batch write to perform both updates atomically
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Add the recipient's UID to the current user's 'friendRequestsSent'
-      final currentUserRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserUid);
-      batch.update(currentUserRef, {
-        'friendRequestsSent': FieldValue.arrayUnion([recipientId]),
-      });
-
-      // Add the current user's UID to the recipient's 'friendRequestsReceived'
-      final recipientUserRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(recipientId);
-      batch.update(recipientUserRef, {
-        'friendRequestsReceived': FieldValue.arrayUnion([currentUserUid]),
-      });
-
-      await batch.commit();
+      await _userService.sendFriendRequest(recipientId);
 
       if (mounted) {
         ScaffoldMessenger.of(

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'home_screen.dart';
 import 'account_screen.dart';
+import 'widgets/user_avatar.dart';
 
 class MainAppShell extends StatefulWidget {
   const MainAppShell({super.key});
@@ -36,37 +37,11 @@ class _MainAppShellState extends State<MainAppShell> {
       appBar: AppBar(
         title: Text(_titles[_selectedIndex]),
         actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 12.0),
-            child: StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-              stream: FirebaseFirestore.instance
-                  .collection('users')
-                  .doc(user?.uid)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const CircleAvatar(child: Icon(Icons.person));
-                }
-                final photoURL = snapshot.data?.data()?['photoURL'] as String?;
-                return CircleAvatar(
-                  backgroundColor: Theme.of(context).colorScheme.surfaceVariant,
-                  backgroundImage:
-                      (photoURL != null && !photoURL.contains('dicebear.com'))
-                      ? NetworkImage(photoURL)
-                      : null,
-                  child: (photoURL != null && photoURL.contains('dicebear.com'))
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(60),
-                          child: SvgPicture.network(
-                            photoURL,
-                            fit: BoxFit.cover,
-                          ),
-                        )
-                      : (photoURL == null ? const Icon(Icons.person) : null),
-                );
-              },
+          if (user != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12.0),
+              child: UserAvatar(userId: user.uid),
             ),
-          ),
         ],
       ),
       body: IndexedStack(index: _selectedIndex, children: _screens),

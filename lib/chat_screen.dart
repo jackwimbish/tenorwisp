@@ -2,10 +2,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 
 import 'package:tenorwisp/chat_bubble.dart';
+import 'package:tenorwisp/services/chat_service.dart';
+import 'package:tenorwisp/services/storage_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
@@ -24,6 +25,8 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _messageController = TextEditingController();
   final _currentUser = FirebaseAuth.instance.currentUser;
+  final _chatService = ChatService();
+  final _storageService = StorageService();
 
   Future<void> _pickMedia() async {
     final source = await showModalBottomSheet<String>(
@@ -69,7 +72,8 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       if (pickedFile != null) {
-        await _uploadMedia(pickedFile);
+        final isVideo = pickedFile.path.toLowerCase().endsWith('.mp4');
+        await _uploadAndSendMedia(File(pickedFile.path), isVideo: isVideo);
       }
     } catch (e) {
       if (mounted) {
@@ -80,67 +84,42 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _uploadMedia(XFile file) async {
-    final isVideo = file.path.toLowerCase().endsWith('.mp4');
-    final fileToUpload = File(file.path);
-    final fileExtension = isVideo ? 'mp4' : 'jpg';
-    final fileName = '${DateTime.now().millisecondsSinceEpoch}.$fileExtension';
-    final destination =
-        'chat_media/${widget.chatId}/${_currentUser?.uid}/$fileName';
-
+  Future<void> _uploadAndSendMedia(File file, {required bool isVideo}) async {
     try {
-      final ref = FirebaseStorage.instance.ref(destination);
-      await ref.putFile(fileToUpload);
-      final downloadUrl = await ref.getDownloadURL();
+      final downloadUrl = await _storageService.uploadChatMedia(
+        widget.chatId,
+        _currentUser!.uid,
+        file,
+      );
       if (isVideo) {
-        await _sendMessage(videoUrl: downloadUrl);
+        await _chatService.sendMessage(widget.chatId, videoUrl: downloadUrl);
       } else {
-        await _sendMessage(imageUrl: downloadUrl);
+        await _chatService.sendMessage(widget.chatId, imageUrl: downloadUrl);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to upload media: ${e.toString()}')),
+          SnackBar(content: Text('Failed to send media: ${e.toString()}')),
         );
       }
     }
   }
 
-  Future<void> _sendMessage({String? imageUrl, String? videoUrl}) async {
+  Future<void> _sendMessage() async {
     final messageText = _messageController.text.trim();
-    if (messageText.isEmpty && imageUrl == null && videoUrl == null) {
+    if (messageText.isEmpty) {
       return; // Don't send empty messages
     }
     _messageController.clear();
-
-    final message = {
-      'senderId': _currentUser?.uid,
-      'text': imageUrl == null ? messageText : null,
-      'imageUrl': imageUrl,
-      'videoUrl': videoUrl,
-      'timestamp': FieldValue.serverTimestamp(),
-    };
-
-    // Add the message to the messages subcollection
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.chatId)
-        .collection('messages')
-        .add(message);
-
-    // Also, update the lastMessage field on the main chat document
-    await FirebaseFirestore.instance
-        .collection('chats')
-        .doc(widget.chatId)
-        .update({
-          'lastMessage': imageUrl != null
-              ? '📷 Image'
-              : videoUrl != null
-              ? '📹 Video'
-              : messageText,
-          'lastMessage': imageUrl != null ? '📷 Image' : messageText,
-          'lastMessageTimestamp': FieldValue.serverTimestamp(),
-        });
+    try {
+      await _chatService.sendMessage(widget.chatId, text: messageText);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send message: ${e.toString()}')),
+        );
+      }
+    }
   }
 
   @override
@@ -207,7 +186,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.send),
-                  onPressed: () => _sendMessage(),
+                  onPressed: _sendMessage,
                 ),
               ],
             ),

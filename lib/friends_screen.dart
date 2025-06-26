@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:tenorwisp/services/user_service.dart';
 import 'add_friend_screen.dart';
 
 class FriendsScreen extends StatefulWidget {
@@ -11,39 +12,11 @@ class FriendsScreen extends StatefulWidget {
 }
 
 class _FriendsScreenState extends State<FriendsScreen> {
-  final _currentUser = FirebaseAuth.instance.currentUser;
+  final _userService = UserService();
 
   Future<void> _acceptFriendRequest(String requesterId) async {
-    final currentUserUid = _currentUser?.uid;
-    if (currentUserUid == null) return;
-
     try {
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Current user's document:
-      // 1. Remove from 'friendRequestsReceived'
-      // 2. Add to 'friends'
-      final currentUserRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserUid);
-      batch.update(currentUserRef, {
-        'friendRequestsReceived': FieldValue.arrayRemove([requesterId]),
-        'friends': FieldValue.arrayUnion([requesterId]),
-      });
-
-      // Requester's document:
-      // 1. Remove from 'friendRequestsSent'
-      // 2. Add to 'friends'
-      final requesterRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(requesterId);
-      batch.update(requesterRef, {
-        'friendRequestsSent': FieldValue.arrayRemove([currentUserUid]),
-        'friends': FieldValue.arrayUnion([currentUserUid]),
-      });
-
-      await batch.commit();
-
+      await _userService.acceptFriendRequest(requesterId);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Friend request accepted!')),
@@ -59,29 +32,8 @@ class _FriendsScreenState extends State<FriendsScreen> {
   }
 
   Future<void> _declineFriendRequest(String requesterId) async {
-    final currentUserUid = _currentUser?.uid;
-    if (currentUserUid == null) return;
-
     try {
-      final batch = FirebaseFirestore.instance.batch();
-
-      // Current user's document: Remove from 'friendRequestsReceived'
-      final currentUserRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(currentUserUid);
-      batch.update(currentUserRef, {
-        'friendRequestsReceived': FieldValue.arrayRemove([requesterId]),
-      });
-
-      // Requester's document: Remove from 'friendRequestsSent'
-      final requesterRef = FirebaseFirestore.instance
-          .collection('users')
-          .doc(requesterId);
-      batch.update(requesterRef, {
-        'friendRequestsSent': FieldValue.arrayRemove([currentUserUid]),
-      });
-
-      await batch.commit();
+      await _userService.declineFriendRequest(requesterId);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -108,7 +60,7 @@ class _FriendsScreenState extends State<FriendsScreen> {
         body: StreamBuilder<DocumentSnapshot>(
           stream: FirebaseFirestore.instance
               .collection('users')
-              .doc(_currentUser?.uid)
+              .doc(_userService.currentUser?.uid)
               .snapshots(),
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
@@ -119,99 +71,17 @@ class _FriendsScreenState extends State<FriendsScreen> {
             }
 
             final userData = snapshot.data!.data() as Map<String, dynamic>;
-            final friendRequests =
+            final friendIds =
+                (userData['friends'] as List<dynamic>?)?.cast<String>() ?? [];
+            final requestIds =
                 (userData['friendRequestsReceived'] as List<dynamic>?)
                     ?.cast<String>() ??
                 [];
-            final friends =
-                (userData['friends'] as List<dynamic>?)?.cast<String>() ?? [];
 
             return TabBarView(
               children: [
-                // My Friends List
-                if (friends.isEmpty)
-                  const Center(child: Text('You have no friends yet. Add one!'))
-                else
-                  ListView.builder(
-                    itemCount: friends.length,
-                    itemBuilder: (context, index) {
-                      final friendId = friends[index];
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(friendId)
-                            .get(),
-                        builder: (context, userSnapshot) {
-                          if (userSnapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return const ListTile(title: Text('Loading...'));
-                          }
-                          if (!userSnapshot.hasData ||
-                              !userSnapshot.data!.exists) {
-                            return ListTile(title: Text('Unknown User'));
-                          }
-
-                          final friendData =
-                              userSnapshot.data!.data() as Map<String, dynamic>;
-                          final username =
-                              friendData['username'] ?? 'No Username';
-
-                          return ListTile(
-                            title: Text(username),
-                            subtitle: Text(friendData['email']),
-                          );
-                        },
-                      );
-                    },
-                  ),
-
-                // Friend Requests List
-                if (friendRequests.isEmpty)
-                  const Center(
-                    child: Text('You have no pending friend requests.'),
-                  )
-                else
-                  ListView.builder(
-                    itemCount: friendRequests.length,
-                    itemBuilder: (context, index) {
-                      final userId = friendRequests[index];
-                      // We need another StreamBuilder to get the user's details
-                      return FutureBuilder<DocumentSnapshot>(
-                        future: FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(userId)
-                            .get(),
-                        builder: (context, userSnapshot) {
-                          if (!userSnapshot.hasData) {
-                            return const ListTile(title: Text('Loading...'));
-                          }
-                          final requestUserData =
-                              userSnapshot.data!.data() as Map<String, dynamic>;
-                          final username =
-                              requestUserData['username'] ?? 'No Username';
-
-                          return ListTile(
-                            title: Text(username),
-                            subtitle: Text('Wants to be your friend.'),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                TextButton(
-                                  onPressed: () => _acceptFriendRequest(userId),
-                                  child: const Text('Accept'),
-                                ),
-                                TextButton(
-                                  onPressed: () =>
-                                      _declineFriendRequest(userId),
-                                  child: const Text('Decline'),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      );
-                    },
-                  ),
+                _buildUserList(friendIds),
+                _buildRequestList(requestIds),
               ],
             );
           },
@@ -225,6 +95,75 @@ class _FriendsScreenState extends State<FriendsScreen> {
           child: const Icon(Icons.person_add),
         ),
       ),
+    );
+  }
+
+  Widget _buildUserList(List<String> userIds) {
+    if (userIds.isEmpty) {
+      return const Center(child: Text('You have no friends yet. Add one!'));
+    }
+    return StreamBuilder<List<DocumentSnapshot>>(
+      stream: _userService.getUsersStream(userIds),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final users = snapshot.data!;
+        return ListView.builder(
+          itemCount: users.length,
+          itemBuilder: (context, index) {
+            final userDoc = users[index];
+            final userData = userDoc.data() as Map<String, dynamic>;
+            final username = userData['username'] ?? 'No Username';
+            return ListTile(
+              title: Text(username),
+              subtitle: Text(userData['email']),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildRequestList(List<String> userIds) {
+    if (userIds.isEmpty) {
+      return const Center(child: Text('You have no pending friend requests.'));
+    }
+    return StreamBuilder<List<DocumentSnapshot>>(
+      stream: _userService.getUsersStream(userIds),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final users = snapshot.data!;
+        return ListView.builder(
+          itemCount: users.length,
+          itemBuilder: (context, index) {
+            final userDoc = users[index];
+            final userData = userDoc.data() as Map<String, dynamic>;
+            final username = userData['username'] ?? 'No Username';
+            final userId = userDoc.id;
+
+            return ListTile(
+              title: Text(username),
+              subtitle: Text('Wants to be your friend.'),
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () => _acceptFriendRequest(userId),
+                    child: const Text('Accept'),
+                  ),
+                  TextButton(
+                    onPressed: () => _declineFriendRequest(userId),
+                    child: const Text('Decline'),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
