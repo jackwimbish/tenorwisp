@@ -19,4 +19,16 @@ class StorageService {
     await ref.putFile(file);
     return await ref.getDownloadURL();
   }
+
+  /// A generic file upload method.
+  Future<void> uploadFile(File file, String path) async {
+    try {
+      final ref = _storage.ref(path);
+      await ref.putFile(file);
+    } catch (e) {
+      // ignore: avoid_print
+      print(e);
+      rethrow;
+    }
+  }
 }

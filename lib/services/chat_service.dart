@@ -6,23 +6,26 @@ class ChatService {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
 
   // This function handles finding or creating a chat and returns the chat ID.
-  Future<String> getOrCreateChat(String recipientId) async {
-    final currentUserUid = _firebaseAuth.currentUser?.uid;
-    if (currentUserUid == null) throw Exception("User not logged in");
+  Future<String> getOrCreateChat(String otherUserId) async {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not logged in.');
+    }
 
-    // A consistent way to generate a chat ID between two users
-    final participants = [currentUserUid, recipientId]..sort();
-    final chatId = participants.join('_');
+    // Create a consistent chatId regardless of who starts the chat
+    List<String> ids = [currentUser.uid, otherUserId];
+    ids.sort();
+    String chatId = ids.join('_');
 
-    // Check if a chat document with this ID already exists
+    // Check if the chat document already exists
     final chatDocRef = _firestore.collection('chats').doc(chatId);
-    final chatDoc = await chatDocRef.get();
+    final docSnapshot = await chatDocRef.get();
 
-    if (!chatDoc.exists) {
-      // If chat doesn't exist, create it
+    // If it doesn't exist, create it
+    if (!docSnapshot.exists) {
       await chatDocRef.set({
-        'participants': participants,
-        'lastMessage': 'Chat started',
+        'participants': ids,
+        'lastMessage': '',
         'lastMessageTimestamp': FieldValue.serverTimestamp(),
       });
     }
@@ -30,45 +33,102 @@ class ChatService {
     return chatId;
   }
 
-  Future<void> sendMessage(
-    String chatId, {
-    String? text,
-    String? imageUrl,
-    String? videoUrl,
-  }) async {
-    final currentUserUid = _firebaseAuth.currentUser?.uid;
-    if (currentUserUid == null) throw Exception("User not logged in");
-
-    if (text?.isEmpty ?? true && imageUrl == null && videoUrl == null) {
-      return; // Don't send empty messages
-    }
-
+  // Use a transaction to send a message and update the parent chat doc
+  Future<void> sendMessage(String chatId, {String? text}) async {
+    final currentUser = _firebaseAuth.currentUser!;
     final message = {
-      'senderId': currentUserUid,
-      'text': text,
-      'imageUrl': imageUrl,
-      'videoUrl': videoUrl,
+      'senderId': currentUser.uid,
       'timestamp': FieldValue.serverTimestamp(),
+      'viewed': false,
+      'expiresAt': null,
+      'text': text,
+      'imageUrl': null,
+      'videoUrl': null,
+      'thumbnailUrl': null,
+      'aspectRatio': null,
+      'status': 'complete',
     };
 
-    final chatRef = _firestore.collection('chats').doc(chatId);
+    final chatDocRef = _firestore.collection('chats').doc(chatId);
+    final messageDocRef = chatDocRef.collection('messages').doc();
 
-    // Add the message to the messages subcollection
-    await chatRef.collection('messages').add(message);
+    return _firestore.runTransaction((transaction) async {
+      // Get the chat document
+      final chatSnapshot = await transaction.get(chatDocRef);
+      if (!chatSnapshot.exists) {
+        throw Exception("Chat does not exist!");
+      }
 
-    // Also, update the lastMessage field on the main chat document
-    String lastMessage;
-    if (imageUrl != null) {
-      lastMessage = '📷 Image';
-    } else if (videoUrl != null) {
-      lastMessage = '📹 Video';
-    } else {
-      lastMessage = text!;
-    }
+      // Add participants to the message for security rules
+      final participants =
+          (chatSnapshot.data()!['participants'] as List<dynamic>)
+              .cast<String>();
+      final messageWithParticipants = {
+        ...message,
+        'participants': participants,
+      };
 
-    await chatRef.update({
-      'lastMessage': lastMessage,
-      'lastMessageTimestamp': FieldValue.serverTimestamp(),
+      // Set the new message
+      transaction.set(messageDocRef, messageWithParticipants);
+
+      // Update the last message on the parent chat document
+      transaction.update(chatDocRef, {
+        'lastMessage': text,
+        'lastMessageTimestamp': FieldValue.serverTimestamp(),
+      });
     });
+  }
+
+  // This is now just for creating the placeholder for media uploads
+  Future<DocumentReference> createMediaMessagePlaceholder(String chatId) async {
+    final currentUser = _firebaseAuth.currentUser!;
+    final chatDocRef = _firestore.collection('chats').doc(chatId);
+
+    // We need to get the participants to embed them in the message doc
+    final chatSnapshot = await chatDocRef.get();
+    if (!chatSnapshot.exists) {
+      throw Exception("Cannot create message in a chat that does not exist.");
+    }
+    final participants = (chatSnapshot.data()!['participants'] as List<dynamic>)
+        .cast<String>();
+
+    final message = {
+      'senderId': currentUser.uid,
+      'timestamp': FieldValue.serverTimestamp(),
+      'viewed': false,
+      'expiresAt': null,
+      'text': null,
+      'imageUrl': null,
+      'videoUrl': null,
+      'thumbnailUrl': null,
+      'aspectRatio': null,
+      'status': 'uploading',
+      'participants': participants, // Embed participants for security rules
+    };
+    return _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        .add(message);
+  }
+
+  Stream<QuerySnapshot> getMessages(String chatId) {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      // Return an empty stream if the user is not logged in.
+      return const Stream.empty();
+    }
+    return _firestore
+        .collection('chats')
+        .doc(chatId)
+        .collection('messages')
+        // Add this clause to match our security rules.
+        .where('participants', arrayContains: currentUser.uid)
+        .orderBy('timestamp', descending: true)
+        .snapshots();
+  }
+
+  Future<void> createChatWith(String otherUserId) async {
+    // ... existing code ...
   }
 }

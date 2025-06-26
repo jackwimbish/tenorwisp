@@ -8,6 +8,9 @@ import 'package:tenorwisp/chat_bubble.dart';
 import 'package:tenorwisp/services/chat_service.dart';
 import 'package:tenorwisp/services/storage_service.dart';
 
+// Maximum video file size in bytes (e.g., 100MB)
+const int kMaxVideoSizeBytes = 100 * 1024 * 1024;
+
 class ChatScreen extends StatefulWidget {
   final String chatId;
   final String recipientId;
@@ -73,6 +76,20 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (pickedFile != null) {
         final isVideo = pickedFile.path.toLowerCase().endsWith('.mp4');
+        if (isVideo) {
+          final file = File(pickedFile.path);
+          final fileSize = await file.length();
+          if (fileSize > kMaxVideoSizeBytes) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Video is too large (max 100MB).'),
+                ),
+              );
+            }
+            return;
+          }
+        }
         await _uploadAndSendMedia(File(pickedFile.path), isVideo: isVideo);
       }
     } catch (e) {
@@ -85,16 +102,32 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _uploadAndSendMedia(File file, {required bool isVideo}) async {
+    final currentUser = _currentUser;
+    if (currentUser == null) return;
+
     try {
-      final downloadUrl = await _storageService.uploadChatMedia(
+      // 1. Create a placeholder message in Firestore
+      final messageRef = await _chatService.createMediaMessagePlaceholder(
         widget.chatId,
-        _currentUser!.uid,
-        file,
       );
+
       if (isVideo) {
-        await _chatService.sendMessage(widget.chatId, videoUrl: downloadUrl);
+        // 2. Define the upload path for the Cloud Function to catch
+        final uploadPath =
+            'uploads/${currentUser.uid}/${widget.chatId}/${messageRef.id}.mp4';
+        // 3. Upload the file to trigger the cloud function
+        await _storageService.uploadFile(file, uploadPath);
       } else {
-        await _chatService.sendMessage(widget.chatId, imageUrl: downloadUrl);
+        // For images, use the existing flow and update the placeholder
+        final downloadUrl = await _storageService.uploadChatMedia(
+          widget.chatId,
+          currentUser.uid,
+          file,
+        );
+        await messageRef.update({
+          'imageUrl': downloadUrl,
+          'status': 'complete',
+        });
       }
     } catch (e) {
       if (mounted) {
@@ -132,17 +165,33 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('chats')
-                  .doc(widget.chatId)
-                  .collection('messages')
-                  .orderBy('timestamp', descending: true)
-                  .snapshots(),
+              stream: _chatService.getMessages(widget.chatId),
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
+                // 1. Handle loading state
+                if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator());
                 }
+
+                // 2. Handle errors
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}'));
+                }
+
+                // 3. Handle no data (although covered by waiting state, good practice)
+                if (!snapshot.hasData) {
+                  return const Center(child: Text('No messages yet.'));
+                }
+
                 final messages = snapshot.data!.docs;
+
+                // 4. Handle empty chat state
+                if (messages.isEmpty) {
+                  return const Center(
+                    child: Text('Be the first to say something! 👋'),
+                  );
+                }
+
+                // 5. Display the list of messages
                 return ListView.builder(
                   reverse: true, // Show latest messages at the bottom
                   itemCount: messages.length,
@@ -152,12 +201,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     final bool isMe = message['senderId'] == _currentUser?.uid;
 
                     return ChatBubble(
-                      key: ValueKey(
-                        messageDoc.id,
-                      ), // Use message ID as a unique key
-                      text: message['text'],
-                      imageUrl: message['imageUrl'],
-                      videoUrl: message['videoUrl'],
+                      key: ValueKey(messageDoc.id),
+                      data: message,
                       isMe: isMe,
                     );
                   },
