@@ -48,3 +48,22 @@ app.*.map.json
 
 # Firebase options
 /lib/firebase_options.dart
+
+# Flutter-specific ignores
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.dart_tool/
+build/
+
+# IDE-specific ignores
+.idea/
+.vscode/
+
+# Sensitive files
+*.keystore
+*.jks
+/android/key.properties
+/ios/Runner/GoogleService-Info.plist
+/lib/firebase_options.dart
+/android/app/google-services.json
