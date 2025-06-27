@@ -1,0 +1,41 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# TenorWisp Project Architecture
+
+This document outlines the architecture and key files for the TenorWisp project.
+
+## 1. Core App Concept
+
+TenorWisp is a mobile application with a hybrid architecture, combining two main features:
+-   **Direct Messaging:** A real-time chat system using Firebase for users to communicate with friends.
+-   **AI-Powered Discussions:** A platform where user-submitted ideas are anonymously collected and processed by an AI backend to generate public discussion topics.
+
+## 2. Technology Stack & Architecture
+
+The project uses a dual-backend approach to separate real-time services from heavy asynchronous processing.
+
+-   **Frontend:** [Flutter](mdc:pubspec.yaml) (Dart)
+-   **Real-Time Backend (Firebase):**
+    -   Handles user authentication, direct messaging, and file storage.
+    -   Uses Cloud Firestore for its database. See [firestore.rules](mdc:firestore.rules) for security.
+    -   Employs [Cloud Functions (Node.js)](mdc:functions/index.js) for media processing tasks.
+-   **AI Backend (Python/Railway):**
+    -   A [FastAPI service](mdc:backend/main.py) responsible for all AI/ML tasks.
+    -   It is deployed on Railway and is triggered by a secure script.
+
+## 3. Key Directories & Files
+
+When working on the project, be aware of these key files and their purpose:
+
+-   **`lib/`**: Contains all the Flutter application code.
+    -   **`lib/services/`**: Houses client-side business logic, such as [chat_service.dart](mdc:lib/services/chat_service.dart) and [user_service.dart](mdc:lib/services/user_service.dart).
+-   **`backend/`**: Contains the Python FastAPI service for AI processing.
+    -   **`backend/main.py`**: The main entry point for the AI server. It contains the logic for processing submissions.
+-   **`functions/`**: Contains server-side Node.js logic for real-time Firebase tasks (e.g., video processing).
+-   **`trigger_generation.py`**: A root-level Python script used to securely initiate the AI topic generation process on the deployed backend.
+-   **`_docs/`**: Contains essential planning and architectural documents.
+    -   **[development_plan.md](mdc:_docs/development_plan.md)**: Outlines the phased development plan for the AI features.
+    -   **[data_model_overview.md](mdc:_docs/data_model_overview.md)**: Describes the Firestore data structures for users, submissions, and threads.
