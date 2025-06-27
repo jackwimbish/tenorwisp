@@ -51,6 +51,11 @@ The project utilizes a **hybrid backend architecture**, using the right tool for
 
 The application is now a functional prototype with a sophisticated, dual-backend architecture.
 
+-   **User Submission & Status Flow:** A complete, secure, and user-friendly flow has been implemented for the AI discussion platform.
+    -   **Dynamic UI:** A new `SubmissionScreen` allows users to submit, view, and withdraw their topic ideas. The UI dynamically adapts, showing a submission form or the user's active submission status.
+    -   **Atomic Operations:** Firestore batched writes are used to guarantee data consistency when creating or withdrawing a submission, ensuring the `submissions` and `users` collections are always in sync.
+    -   **Integrated Security:** The `firestore.rules` have been successfully merged to support this new functionality without compromising the security of the existing chat and friend features.
+
 -   **AI Backend Foundation:** A secure, deployable, and triggerable backend service has been established on Railway.
     -   **Secure Endpoint:** A FastAPI server exposes a `/api/admin/start_generation_round` endpoint, protected by API key authentication.
     -   **Deployment & Trigger:** The service is successfully deployed, and the `trigger_generation.py` script can securely communicate with it, providing a mechanism to initiate the AI processing pipeline.
@@ -73,10 +78,10 @@ The application is now a functional prototype with a sophisticated, dual-backend
 *   **Functional Core:** The project has successfully implemented the most critical features of a messaging app and has now built the complete foundational "ignition switch" for the new AI platform.
 
 ### Areas for Improvement & Next Steps
-*   **Implement User Submission Flow:** The next major step is to build the Flutter UI for users to submit topic ideas and connect it to the Firestore data model (`submissions` collection).
-*   **Build Core AI Logic:** The `start_generation_round` function in the Python backend needs to be fleshed out with the actual logic for fetching data from Firestore, running analysis, and generating threads.
+*   **Build Core AI Logic:** The next major step is to build out the `start_generation_round` function in the Python backend. This includes fetching all "live" submissions from Firestore, running the clustering analysis, generating threads with an LLM, and archiving the processed submissions.
 *   **UX Enhancements:** Continue to improve the user experience with features like read receipts, typing indicators, and user online/offline status for the messaging component.
+*   **Implement Edit Submission:** Add the "Edit" functionality to the `SubmissionScreen` as a future enhancement.
 
 ## 5. Conclusion
 
-The TenorWisp codebase is in an exceptionally strong position. The successful implementation of the new Python backend on Railway marks the completion of a major architectural milestone. By establishing a robust, scalable, and secure foundation for AI processing, the project is perfectly prepared to build out the full suite of features for the AI-powered discussion platform, while continuing to support its existing real-time messaging capabilities. 
+The TenorWisp codebase is in an exceptionally strong position. The successful implementation of the new Python backend on Railway and the completion of the entire user-facing submission flow mark two major architectural milestones. By establishing a robust, scalable, and secure foundation for AI processing and data collection, the project is perfectly prepared to build out the full suite of features for the AI-powered discussion platform, while continuing to support its existing real-time messaging capabilities. 
