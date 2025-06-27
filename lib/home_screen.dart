@@ -7,6 +7,7 @@ import 'users_list_screen.dart';
 import 'package:tenorwisp/services/user_service.dart';
 import 'package:tenorwisp/users_list_screen.dart';
 import 'package:tenorwisp/submission_screen.dart';
+import 'package:tenorwisp/public_threads_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -52,6 +53,7 @@ class HomeScreen extends StatelessWidget {
                   'Welcome, ${username ?? user?.email ?? 'friend'}!',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
+                const SizedBox(height: 20),
                 ElevatedButton.icon(
                   icon: const Icon(Icons.lightbulb_outline),
                   label: const Text('Submit an Idea'),
@@ -60,6 +62,26 @@ class HomeScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (context) => const SubmissionScreen(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 30,
+                      vertical: 15,
+                    ),
+                    textStyle: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ElevatedButton.icon(
+                  icon: const Icon(Icons.forum_outlined),
+                  label: const Text('View Discussions'),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const PublicThreadsScreen(),
                       ),
                     );
                   },

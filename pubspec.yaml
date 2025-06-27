@@ -43,6 +43,7 @@ dependencies:
   video_player: ^2.10.0
   chewie: ^1.8.1
   flutter_cache_manager: ^3.4.1
+  timeago: ^3.7.1
 
 dev_dependencies:
   flutter_test:
