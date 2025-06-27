@@ -6,7 +6,7 @@ This document provides a high-level overview and review of the TenorWisp Flutter
 
 TenorWisp is evolving from a pure messaging app into a unique social platform with two primary components:
 
-1.  **Ephemeral Messaging:** The original core feature, allowing users to send messages, photos, and videos that disappear after being viewed. This functionality remains a key part of the app.
+1.  **Direct Messaging:** The original core feature, allowing users to send messages, photos, and videos to friends. This functionality remains a key part of the app.
 2.  **AI-Powered Discussions:** The new strategic direction. This feature is designed to foster more authentic conversations by prioritizing ideas over identities.
 
 The workflow for the new discussion feature is as follows:
