@@ -1,4 +1,5 @@
 const {onObjectFinalized} = require("firebase-functions/v2/storage");
+const {logger} = require("firebase-functions");
 const admin = require("firebase-admin");
 const {Storage} = require("@google-cloud/storage");
 const path = require("path");
@@ -28,32 +29,36 @@ exports.processVideoUpload = onObjectFinalized(async (event) => {
 
       // --- Exit if not a video or not in the 'uploads' folder ---
       if (!contentType.startsWith("video/") || !filePath.startsWith("uploads/")) {
-        return functions.logger.log("Not a video or not in uploads folder. Exiting.");
+        return logger.log("Not a video or not in uploads folder. Exiting.");
       }
 
       // --- 1. Validate File Size ---
       if (object.size > MAX_FILE_SIZE_BYTES) {
-        functions.logger.error(
+        logger.error(
             `File too large: ${object.size} bytes. Deleting.`,
         );
         await bucket.file(filePath).delete();
-        return functions.logger.log("Deleted oversized file.");
+        return logger.log("Deleted oversized file.");
       }
 
-      const fileName = path.basename(filePath);
+      // Correctly parse chatId and messageId from the file path
+      const pathParts = filePath.split("/");
+      const chatId = pathParts[2];
+      const fileName = pathParts[3];
+      const messageId = path.basename(fileName, path.extname(fileName));
+
       const tempFilePath = path.join(os.tmpdir(), fileName);
-      const tempThumbnailPath = path.join(os.tmpdir(), `thumb_${fileName}.jpg`);
-      const [,, chatId, messageId] = filePath.split("/");
+      const tempThumbnailPath = path.join(os.tmpdir(), `thumb_${path.basename(fileName, path.extname(fileName))}.jpg`);
 
       try {
         // Download video to temp directory
         await bucket.file(filePath).download({destination: tempFilePath});
-        functions.logger.log("Video downloaded to", tempFilePath);
+        logger.log("Video downloaded to", tempFilePath);
 
         // --- 2. Get Aspect Ratio & 3. Generate Thumbnail ---
         const aspectRatio = await getVideoAspectRatio(tempFilePath);
         await generateThumbnail(tempFilePath, tempThumbnailPath);
-        functions.logger.log("Thumbnail created at", tempThumbnailPath);
+        logger.log("Thumbnail created at", tempThumbnailPath);
 
         // --- 4. Upload new files and get public URLs ---
         const permanentVideoPath = `chat_media/${chatId}/${messageId}.mp4`;
@@ -88,16 +93,16 @@ exports.processVideoUpload = onObjectFinalized(async (event) => {
           aspectRatio: aspectRatio,
           status: "complete", // Update status from 'uploading' to 'complete'
         });
-        functions.logger.log("Firestore document updated:", messageRef.path);
+        logger.log("Firestore document updated:", messageRef.path);
 
         // --- 6. Cleanup ---
         await bucket.file(filePath).delete(); // Delete original from uploads/
         fs.unlinkSync(tempFilePath); // Delete local temp files
         fs.unlinkSync(tempThumbnailPath);
 
-        return functions.logger.log("Processing complete.");
+        return logger.log("Processing complete.");
       } catch (error) {
-        functions.logger.error("Error processing video:", error);
+        logger.error("Error processing video:", error);
         // If something fails, update the message status to 'failed'
         const messageRef = db.collection("chats").doc(chatId)
             .collection("messages").doc(messageId);

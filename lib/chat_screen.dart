@@ -1,15 +1,12 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'dart:io';
-
-import 'package:tenorwisp/chat_bubble.dart';
 import 'package:tenorwisp/services/chat_service.dart';
 import 'package:tenorwisp/services/storage_service.dart';
-
-// Maximum video file size in bytes (e.g., 100MB)
-const int kMaxVideoSizeBytes = 100 * 1024 * 1024;
+import 'package:tenorwisp/chat_bubble.dart';
+import 'package:tenorwisp/services/media_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
@@ -26,10 +23,18 @@ class ChatScreen extends StatefulWidget {
 }
 
 class _ChatScreenState extends State<ChatScreen> {
-  final _messageController = TextEditingController();
-  final _currentUser = FirebaseAuth.instance.currentUser;
-  final _chatService = ChatService();
-  final _storageService = StorageService();
+  final TextEditingController _messageController = TextEditingController();
+  final ChatService _chatService = ChatService();
+  final StorageService _storageService = StorageService();
+  final MediaService _mediaService = MediaService();
+
+  User? _currentUser;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentUser = FirebaseAuth.instance.currentUser;
+  }
 
   Future<void> _pickMedia() async {
     final source = await showModalBottomSheet<String>(
@@ -59,43 +64,33 @@ class _ChatScreenState extends State<ChatScreen> {
 
     if (source == null) return;
 
-    final picker = ImagePicker();
-    XFile? pickedFile;
+    File? compressedFile;
+    bool isVideo = false;
 
     try {
-      if (source == 'gallery_photo') {
-        pickedFile = await picker.pickImage(source: ImageSource.gallery);
-      } else if (source == 'camera_photo') {
-        pickedFile = await picker.pickImage(source: ImageSource.camera);
-      } else if (source == 'camera_video') {
-        pickedFile = await picker.pickVideo(
-          source: ImageSource.camera,
-          maxDuration: const Duration(seconds: 60),
+      if (source.contains('video')) {
+        isVideo = true;
+        compressedFile = await _mediaService.pickAndCompressVideo(
+          source: source == 'camera_video'
+              ? ImageSource.camera
+              : ImageSource.gallery,
+          context: context,
+        );
+      } else {
+        compressedFile = await _mediaService.pickAndCompressImage(
+          source: source == 'camera_photo'
+              ? ImageSource.camera
+              : ImageSource.gallery,
         );
       }
 
-      if (pickedFile != null) {
-        final isVideo = pickedFile.path.toLowerCase().endsWith('.mp4');
-        if (isVideo) {
-          final file = File(pickedFile.path);
-          final fileSize = await file.length();
-          if (fileSize > kMaxVideoSizeBytes) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Video is too large (max 100MB).'),
-                ),
-              );
-            }
-            return;
-          }
-        }
-        await _uploadAndSendMedia(File(pickedFile.path), isVideo: isVideo);
+      if (compressedFile != null) {
+        await _uploadAndSendMedia(compressedFile, isVideo: isVideo);
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick media: ${e.toString()}')),
+          SnackBar(content: Text('Failed to process media: ${e.toString()}')),
         );
       }
     }

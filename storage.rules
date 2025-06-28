@@ -12,6 +12,12 @@ service firebase.storage {
       allow write: if request.auth != null && imageName == (request.auth.uid + '.jpg');
     }
 
+    // Allow users to upload raw videos to a temporary staging area
+    // This will trigger a Cloud Function for processing.
+    match /uploads/{userId}/{chatId}/{mediaName} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+
     // Allow users in a chat to read/write media in that chat's folder
     match /chat_media/{chatId}/{userId}/{mediaName} {
       allow read: if request.auth != null; // For simplicity, allow any authenticated user to read
