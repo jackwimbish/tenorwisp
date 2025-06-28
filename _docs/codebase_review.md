@@ -33,6 +33,7 @@ The project utilizes a **hybrid backend architecture**, using the right tool for
     -   **Purpose:** Used for all asynchronous, heavy-lifting AI/ML tasks, starting with topic generation.
 -   **Key Dependencies:**
     -   `firebase_core`, `firebase_auth`, `cloud_firestore`, `firebase_storage`
+    -   `get_it`: For dependency injection (service locator pattern).
     -   `image_picker`: For selecting images and videos from the user's device.
     -   `video_player`, `chewie`, & `flutter_cache_manager`: For robust in-app video playback.
     -   (Backend) `fastapi`, `uvicorn`, `python-dotenv`: For the Python AI service.
@@ -50,6 +51,11 @@ The project utilizes a **hybrid backend architecture**, using the right tool for
 ## 3. Key Features Implemented
 
 The application is now a functional prototype with a sophisticated, dual-backend architecture.
+
+-   **Service-Oriented Refactoring:** Core features like real-time chat and user submissions have been refactored to use a service-oriented architecture, significantly improving code quality.
+    -   **Dependency Injection:** The `get_it` package was introduced as a service locator to manage dependencies, decoupling UI components from the services they consume.
+    -   **Centralized Business Logic:** All direct Firestore calls have been moved out of the widgets and into dedicated service classes (e.g., `ChatService`, `SubmissionService`). This makes the logic reusable, testable, and easier to maintain.
+    -   **Simplified Widgets:** UI widgets (`ChatScreen`, `SubmissionScreen`) are now much simpler, responsible only for displaying state and capturing user input, delegating all business logic to the service layer.
 
 -   **User Submission & Status Flow:** A complete, secure, and user-friendly flow has been implemented for the AI discussion platform.
     -   **Dynamic UI:** A new `SubmissionScreen` allows users to submit, view, and withdraw their topic ideas. The UI dynamically adapts, showing a submission form or the user's active submission status.
@@ -77,6 +83,7 @@ The application is now a functional prototype with a sophisticated, dual-backend
 
 ### Strengths
 *   **Excellent Hybrid Architecture:** The codebase now has a clear and powerful separation of concerns between the real-time Firebase backend and the Python-based AI backend. This is a production-ready, scalable architecture that uses the best platform for each task.
+*   **Modular Frontend Architecture:** The recent refactoring effort has significantly improved the frontend architecture. By adopting a service layer with dependency injection, the codebase is now more modular, testable, and easier to reason about, establishing clear boundaries between UI and business logic.
 *   **High-Performance Media:** The media pipeline is now highly efficient, featuring both client-side compression for faster uploads and server-side processing for videos. This ensures a fast user experience while minimizing data and storage costs.
 *   **Secure and Scalable Foundation:** The combination of secure Firebase rules and a secure, independently scalable AI service on Railway ensures the application is both safe and poised for growth.
 *   **Functional Core:** The project has successfully implemented the most critical features of a messaging app and has now built the complete foundational "ignition switch" for the new AI platform.

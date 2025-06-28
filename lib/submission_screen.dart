@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:tenorwisp/services/submission_service.dart';
 
 class SubmissionScreen extends StatefulWidget {
   const SubmissionScreen({super.key});
@@ -10,140 +10,18 @@ class SubmissionScreen extends StatefulWidget {
 }
 
 class _SubmissionScreenState extends State<SubmissionScreen> {
-  final _submissionController = TextEditingController();
-  bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _submissionController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _submit() async {
-    final user = FirebaseAuth.instance.currentUser;
-    final submissionText = _submissionController.text.trim();
-
-    // Basic validation
-    if (user == null || submissionText.isEmpty) {
-      // Show an error message if user is not logged in or text is empty
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('You must be logged in and provide text to submit.'),
-        ),
-      );
-      return;
-    }
-
-    // Show a loading indicator
-    setState(() {
-      _isLoading = true;
-    });
-
-    final firestore = FirebaseFirestore.instance;
-
-    // 1. Create a reference for the new submission document to get its ID.
-    final newSubmissionRef = firestore.collection('submissions').doc();
-
-    // 2. Create a reference to the current user's document.
-    final userDocRef = firestore.collection('users').doc(user.uid);
-
-    // 3. Create the write batch.
-    final batch = firestore.batch();
-
-    // 4. Stage the creation of the new submission document.
-    batch.set(newSubmissionRef, {
-      'author_uid': user.uid,
-      'submissionText': submissionText,
-      'createdAt': FieldValue.serverTimestamp(),
-      'lastEdited': FieldValue.serverTimestamp(),
-      'status': 'live', // All new submissions are 'live'
-    });
-
-    // 5. Stage the update to the user's document, linking the new submission.
-    batch.update(userDocRef, {'live_submission_id': newSubmissionRef.id});
-
-    // 6. Commit the batch. Both operations will either succeed or fail together.
-    try {
-      await batch.commit();
-      // Show a success message
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Your submission has been received!')),
-      );
-      // Optionally, pop the screen
-      // Navigator.of(context).pop();
-    } catch (e) {
-      if (!mounted) return;
-      // Show an error message
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('An error occurred: $e')));
-    } finally {
-      // Hide the loading indicator
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<void> _withdrawSubmission(String submissionId) async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return;
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final firestore = FirebaseFirestore.instance;
-    final submissionRef = firestore.collection('submissions').doc(submissionId);
-    final userRef = firestore.collection('users').doc(user.uid);
-
-    final batch = firestore.batch();
-
-    // 1. Mark the submission as 'withdrawn' instead of deleting
-    batch.update(submissionRef, {'status': 'withdrawn'});
-
-    // 2. Remove the link from the user's profile
-    batch.update(userRef, {'live_submission_id': FieldValue.delete()});
-
-    try {
-      await batch.commit();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Your submission has been withdrawn.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('An error occurred while withdrawing: $e')),
-      );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-    }
-  }
+  final SubmissionService _submissionService = SubmissionService();
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Share an Idea'),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
-      // Listen to the user's document to check for a live submission
       body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(user?.uid)
-            .snapshots(),
+        stream: _submissionService.userDocStream,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -155,25 +33,74 @@ class _SubmissionScreenState extends State<SubmissionScreen> {
           }
 
           final userData = snapshot.data!.data() as Map<String, dynamic>;
-          // Use .get() to safely access the field, which might not exist
           final liveSubmissionId = userData.containsKey('live_submission_id')
               ? userData['live_submission_id']
               : null;
 
           if (liveSubmissionId == null) {
-            // If the user has NO live submission, show the creation form.
-            return _buildSubmissionForm();
+            return SubmissionCreationForm(
+              submissionService: _submissionService,
+            );
           } else {
-            // If the user HAS a live submission, show its content.
-            return _buildSubmissionStatusView(liveSubmissionId);
+            return ActiveSubmissionView(
+              submissionId: liveSubmissionId,
+              submissionService: _submissionService,
+            );
           }
         },
       ),
     );
   }
+}
 
-  // --- UI for Creating a Submission ---
-  Widget _buildSubmissionForm() {
+class SubmissionCreationForm extends StatefulWidget {
+  final SubmissionService submissionService;
+
+  const SubmissionCreationForm({super.key, required this.submissionService});
+
+  @override
+  State<SubmissionCreationForm> createState() => _SubmissionCreationFormState();
+}
+
+class _SubmissionCreationFormState extends State<SubmissionCreationForm> {
+  final _submissionController = TextEditingController();
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _submissionController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await widget.submissionService.submitIdea(
+        _submissionController.text.trim(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your submission has been received!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('An error occurred: $e')));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -214,14 +141,56 @@ class _SubmissionScreenState extends State<SubmissionScreen> {
       ),
     );
   }
+}
 
-  // --- UI for Viewing an Existing Submission ---
-  Widget _buildSubmissionStatusView(String submissionId) {
+class ActiveSubmissionView extends StatefulWidget {
+  final String submissionId;
+  final SubmissionService submissionService;
+
+  const ActiveSubmissionView({
+    super.key,
+    required this.submissionId,
+    required this.submissionService,
+  });
+
+  @override
+  State<ActiveSubmissionView> createState() => _ActiveSubmissionViewState();
+}
+
+class _ActiveSubmissionViewState extends State<ActiveSubmissionView> {
+  bool _isLoading = false;
+
+  Future<void> _withdraw() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      await widget.submissionService.withdrawActiveSubmission(
+        widget.submissionId,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Your submission has been withdrawn.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('An error occurred while withdrawing: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return StreamBuilder<DocumentSnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('submissions')
-          .doc(submissionId)
-          .snapshots(),
+      stream: widget.submissionService.getSubmissionStream(widget.submissionId),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
@@ -248,7 +217,6 @@ class _SubmissionScreenState extends State<SubmissionScreen> {
               ),
               const SizedBox(height: 16),
               Card(
-                elevation: 2,
                 child: Padding(
                   padding: const EdgeInsets.all(16.0),
                   child: Text(
@@ -257,35 +225,20 @@ class _SubmissionScreenState extends State<SubmissionScreen> {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  TextButton.icon(
-                    icon: const Icon(Icons.edit),
-                    label: const Text("Edit"),
-                    onPressed: () {
-                      // TODO: Implement edit functionality
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Edit functionality not implemented yet.',
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                  TextButton.icon(
-                    icon: const Icon(Icons.delete_outline),
-                    label: const Text("Withdraw"),
-                    style: TextButton.styleFrom(
-                      foregroundColor: Theme.of(context).colorScheme.error,
-                    ),
-                    onPressed: _isLoading
-                        ? null
-                        : () => _withdrawSubmission(submissionId),
-                  ),
-                ],
+              const SizedBox(height: 16),
+              TextButton.icon(
+                onPressed: _isLoading ? null : _withdraw,
+                icon: _isLoading
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline, size: 20),
+                label: const Text('Withdraw Submission'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.error,
+                ),
               ),
             ],
           ),

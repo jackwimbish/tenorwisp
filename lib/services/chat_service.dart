@@ -1,5 +1,11 @@
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:tenorwisp/service_locator.dart';
+import 'package:tenorwisp/services/media_service.dart';
+import 'package:tenorwisp/services/storage_service.dart';
 
 class ChatService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -80,7 +86,9 @@ class ChatService {
   }
 
   // This is now just for creating the placeholder for media uploads
-  Future<DocumentReference> createMediaMessagePlaceholder(String chatId) async {
+  Future<DocumentReference> _createMediaMessagePlaceholder(
+    String chatId,
+  ) async {
     final currentUser = _firebaseAuth.currentUser!;
     final chatDocRef = _firestore.collection('chats').doc(chatId);
 
@@ -110,6 +118,52 @@ class ChatService {
         .doc(chatId)
         .collection('messages')
         .add(message);
+  }
+
+  Future<void> sendMediaMessage({
+    required String chatId,
+    required String source,
+    required BuildContext context,
+  }) async {
+    final mediaService = getIt<MediaService>();
+    final storageService = getIt<StorageService>();
+    final currentUser = _firebaseAuth.currentUser;
+
+    if (currentUser == null) return;
+
+    final isVideo = source.contains('video');
+    final imageSource = source == 'camera_photo' || source == 'camera_video'
+        ? ImageSource.camera
+        : ImageSource.gallery;
+
+    File? compressedFile;
+    if (isVideo) {
+      compressedFile = await mediaService.pickAndCompressVideo(
+        source: imageSource,
+        context: context,
+      );
+    } else {
+      compressedFile = await mediaService.pickAndCompressImage(
+        source: imageSource,
+      );
+    }
+
+    if (compressedFile == null) return;
+
+    final messageRef = await _createMediaMessagePlaceholder(chatId);
+
+    if (isVideo) {
+      final uploadPath =
+          'uploads/${currentUser.uid}/$chatId/${messageRef.id}.mp4';
+      await storageService.uploadFile(compressedFile, uploadPath);
+    } else {
+      final downloadUrl = await storageService.uploadChatMedia(
+        chatId,
+        currentUser.uid,
+        compressedFile,
+      );
+      await messageRef.update({'imageUrl': downloadUrl, 'status': 'complete'});
+    }
   }
 
   Stream<QuerySnapshot> getMessages(String chatId) {

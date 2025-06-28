@@ -6,10 +6,12 @@ import 'app_theme.dart';
 import 'login_screen.dart';
 import 'home_screen.dart'; // <-- Import your new HomeScreen
 import 'main_app_shell.dart'; // <-- Import the new main app shell
+import 'package:tenorwisp/service_locator.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  setupServiceLocator();
   runApp(const MyApp());
 }
 
