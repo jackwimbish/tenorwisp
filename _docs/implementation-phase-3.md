@@ -182,7 +182,7 @@ for cluster_id, submissions_in_cluster in sorted_clusters[:3]:
     try:  
         # Generate content using OpenAI's API  
         response = openai.chat.completions.create(  
-            model="gpt-3.5-turbo",  
+            model="gpt-4.1-2025-04-14",  
             messages=[  
                 {"role": "system", "content": system_prompt},  
                 {"role": "user", "content": user_prompt}  
