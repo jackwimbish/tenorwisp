@@ -1,94 +1,68 @@
-# Frontend Refactoring Candidates
+# Frontend Refactor Candidates
 
-This document outlines several areas in the Flutter frontend codebase (`lib` folder) that are good candidates for refactoring. The primary theme across these candidates is the need to **separate business logic from UI code** by introducing a service layer and creating more focused, reusable widgets.
-
----
-
-## 1. Introduce a Service Layer for Firebase Operations
-
-A clear pattern across the codebase is the tight coupling of Firebase logic (Auth, Firestore, Storage) directly within `StatefulWidget` State classes. This makes widgets complex, hard to test, and difficult to maintain.
-
-**Recommendation:** Create a dedicated service layer to handle all backend interactions. This could be structured as follows:
-
--   `lib/services/auth_service.dart`: Handles user authentication (sign up, login, logout).
--   `lib/services/user_service.dart`: Handles user profile management (updating username, photoURL, managing friends).
--   `lib/services/chat_service.dart`: Handles chat-related operations (sending messages, fetching chat streams).
--   `lib/services/storage_service.dart`: Handles file uploads to Firebase Storage.
-
-This single change would simplify almost every screen in the application.
+This document outlines potential refactoring opportunities within the Flutter frontend codebase. The goal of these suggestions is to improve code readability, maintainability, and testability by better separating concerns and breaking down complex widgets.
 
 ---
 
-## 2. Refactor `registration_screen.dart` & `account_screen.dart`
+## 1. `submission_screen.dart`
 
-### Why Refactor?
+The `SubmissionScreen` is a core feature but its implementation in a single `StatefulWidget` mixes UI, state management, and business logic (direct Firestore calls), making it complex and difficult to maintain.
 
--   The `_register` function in `RegistrationScreen` is responsible for form validation, username uniqueness checks, creating an auth user, and setting up two different documents in Firestore via a batch write.
--   The `_updateUsername` function in `AccountScreen` is similarly complex, involving reads, writes, and deletes across multiple documents to ensure username uniqueness.
--   The `_pickAndUploadImage` function in `AccountScreen` mixes UI concerns (`ImagePicker`), storage logic (`FirebaseStorage`), and database updates (`Firestore`, `FirebaseAuth`).
+### Why it needs refactoring:
 
-### Proposed Changes
+-   **Tightly Coupled Logic:** The `_SubmissionScreenState` is directly responsible for making Firestore batch writes (`_submit`, `_withdrawSubmission`). This business logic is not reusable and makes the widget hard to test in isolation.
+-   **Complex Widget Tree:** The `build` method contains a `StreamBuilder` that conditionally renders one of two different, non-trivial UI layouts (`_buildSubmissionForm` or `_buildSubmissionStatusView`). The status view contains *another* nested `StreamBuilder`, which can lead to confusing state management and rebuild cycles.
+-   **Boilerplate State Management:** The loading state is managed via a simple boolean `_isLoading` and manual `setState` calls, which is repeated in every asynchronous action. This is error-prone and verbose.
+-   **Repetitive UI Feedback:** `ScaffoldMessenger.of(context).showSnackBar(...)` calls are scattered within `try/catch` blocks, leading to code duplication for user feedback.
 
--   Move the registration logic into an `AuthService.signUp(email, password, username)` method.
--   Move the username update logic into a `UserService.updateUsername(newUsername)` method.
--   Move the profile picture update logic into a `UserService.updateProfilePicture(file)` method.
--   The widgets will then call these service methods, and the functions within the widgets' State classes will be reduced to a few lines for handling UI state (e.g., `_isLoading`) and navigation.
+### Suggested Changes:
 
----
+1.  **Introduce a `SubmissionService`:**
+    -   Create a new file `lib/services/submission_service.dart`.
+    -   Move all Firestore-related logic from `_SubmissionScreenState` into this new service.
+    -   The service would expose methods like:
+        ```dart
+        Future<void> submitIdea(String text);
+        Future<void> withdrawActiveSubmission();
+        Stream<DocumentSnapshot> get liveSubmissionStream; // To check status
+        ```
+    -   The widget would then simply call these service methods, decoupling it from the database implementation.
 
-## 3. Refactor `friends_screen.dart` & `users_list_screen.dart`
+2.  **Break Down Widgets:**
+    -   Extract the UI for creating a submission into its own widget: `SubmissionCreationForm`. This widget would be stateless and take callbacks (`onSubmited`).
+    -   Extract the UI for viewing an active submission into its own widget: `ActiveSubmissionView`. This widget would take the `submissionId` and be responsible for its own `StreamBuilder` to fetch and display the submission data.
+    -   The main `SubmissionScreen`'s `build` method would become much simpler, primarily handling the logic to decide which of these two child widgets to show.
 
-### Why Refactor?
-
-These screens fetch a list of user IDs and then use a `ListView.builder` with a nested `FutureBuilder` for each item in the list. This is highly inefficient.
-
--   **Performance:** It triggers a separate database read for every single user in the list, which doesn't scale.
--   **UI Experience:** It often leads to a "janky" UI where list items pop in one by one as their individual futures complete.
-
-### Proposed Changes
-
--   Refactor the data fetching logic to use a single, efficient `whereIn` query.
--   First, fetch the list of friend/request IDs from the current user's document.
--   Then, use that list to perform a single query to get all the necessary user profiles at once:
-    ```dart
-    FirebaseFirestore.instance
-        .collection('users')
-        .where(FieldPath.documentId, whereIn: listOfFriendIds)
-        .snapshots() 
-    ```
--   This can be managed by a single `StreamBuilder` that drives the entire list, removing the need for nested `FutureBuilder`s and dramatically improving performance.
--   Additionally, the friend management logic (`_acceptFriendRequest`, `_declineFriendRequest`, `_sendFriendRequest`) should be moved into the `UserService`.
+3.  **Centralize User Feedback:**
+    -   Create a small UI helper utility that provides a method like `showAppSnackBar(BuildContext context, String message, {bool isError = false})`. This would centralize the look and feel of snackbars and reduce code duplication in the widgets.
 
 ---
 
-## 4. Refactor `chat_screen.dart`
+## 2. `chat_screen.dart`
 
-### Why Refactor?
+The `ChatScreen` is another feature-rich widget that would benefit from better separation of concerns. It currently manages service instantiation, complex media picking/uploading logic, and the chat UI all in one place.
 
-The `_ChatScreenState` is a "fat widget" that handles media picking, media uploading to Firebase Storage, and sending messages to Firestore. This mixes many distinct responsibilities. A bug was also found where `lastMessage` was being set twice with slightly different logic.
+### Why it needs refactoring:
 
-### Proposed Changes
+-   **Direct Service Instantiation:** The widget creates its own instances of `ChatService`, `StorageService`, and `MediaService`. This makes the widget difficult to test, as you cannot easily provide mock implementations of these services.
+-   **Business Logic in UI:** Complex workflows, like picking media (`_pickMedia`) and the multi-step process of uploading it with a placeholder message (`_uploadAndSendMedia`), are implemented directly in the `_ChatScreenState`. This logic is not part of the UI's responsibility.
+-   **Monolithic Build Method:** The `build` method constructs the entire screen, including the message list and the message input bar. These are distinct components that could be separated.
 
--   Move the logic for sending messages (text, image, or video) into a `ChatService.sendMessage(...)` method. This method would also contain the corrected and consolidated logic for updating the `lastMessage` field on the chat document.
--   Move the media uploading logic to a `StorageService.uploadChatMedia(...)` method, which would return the `downloadUrl`.
--   The UI would then become a coordinator: call a media picker, pass the file to the storage service, and pass the resulting URL to the chat service.
+### Suggested Changes:
 
----
+1.  **Use Dependency Injection (DI):**
+    -   Instead of the widget creating its own services, they should be provided to it. This could be done via a simple service locator (like `get_it`) or a more complete state management solution that supports DI (like `provider`).
+    -   The widget would then retrieve its dependencies, e.g., `final chatService = getIt<ChatService>();`.
 
-## 5. Create Reusable, Focused Widgets
+2.  **Move Business Logic to Services:**
+    -   The logic in `_uploadAndSendMedia` is a prime candidate to be moved into the `ChatService`. The widget should only be responsible for getting a `File` object and calling a single method:
+        ```dart
+        // In ChatService
+        Future<void> sendMediaMessage(String chatId, File file, bool isVideo);
+        ```
+    -   The service would handle creating the placeholder, uploading to storage, and updating the message status. This makes the logic reusable and keeps the widget clean.
 
-### Why Refactor?
-
-Some widgets contain complex, but self-contained, logic that could be extracted to make them more reusable and the parent widget cleaner.
-
-### Proposed Changes
-
-1.  **`UserAvatar` Widget:**
-    -   **Location:** `main_app_shell.dart`
-    -   **Problem:** The `AppBar` contains a complex `StreamBuilder` with nested conditional logic to display a user's avatar from a normal `NetworkImage`, an SVG from `dicebear.com`, or a default icon.
-    -   **Solution:** Create a `UserAvatar(userId)` widget that encapsulates this stream and rendering logic. The `AppBar` would then contain a clean, single-line widget.
-
-2.  **`VideoPlayerWidget`:**
-    -   **Location:** `chat_bubble.dart`
-    -   **Problem:** `ChatBubble` is a `StatefulWidget` solely to manage the lifecycle of `VideoPlayerController` and `ChewieController`.
-    -   **Solution:** Create a dedicated `VideoPlayerWidget(videoUrl)` that handles all the video player state management. `ChatBubble` can then become a `StatelessWidget`, and simply instantiate `VideoPlayerWidget` when it needs to display a video. 
+3.  **Decompose the UI into Smaller Widgets:**
+    -   **`MessageList` Widget:** The `StreamBuilder` and the `ListView.builder` that display the messages should be extracted into a `MessageList` widget. It would take the `chatId` as a parameter and handle its own data fetching and rendering.
+    -   **`MessageInputBar` Widget:** The `Row` containing the `TextField` and `IconButton`s for sending messages and attaching files should be extracted into its own `MessageInputBar` widget. It would expose callbacks like `onSendMessage(String text)` and `onAttachFile()`.
+    -   The `ChatScreen`'s `build` method would then simply be a `Column` containing the `Expanded(MessageList(...))` and `MessageInputBar(...)`. 
