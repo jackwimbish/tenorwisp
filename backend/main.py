@@ -133,6 +133,40 @@ async def trigger_generation_round():
 
 
     # 2. Analyze: Vectorize submissions and cluster them
+    print("2. Analyzing submissions...")
+    try:
+        # Extract just the text for vectorization
+        texts = [sub['text'] for sub in submissions_to_process]
+
+        # Vectorize the text
+        print("   - Vectorizing texts...")
+        embeddings = vectorizer.encode(texts)
+
+        # Cluster the embeddings
+        # min_cluster_size is a key parameter to tune. A smaller value finds more, smaller topics.
+        print("   - Clustering vectors...")
+        clusterer = hdbscan.HDBSCAN(min_cluster_size=3, metric='euclidean', gen_min_span_tree=True)
+        cluster_labels = clusterer.fit_predict(embeddings)
+
+        # Group submissions by their new cluster label
+        clustered_submissions = {}
+        for i, label in enumerate(cluster_labels):
+            if label == -1:
+                continue  # Ignore noise points
+            if label not in clustered_submissions:
+                clustered_submissions[label] = []
+            clustered_submissions[label].append(submissions_to_process[i])
+        
+        if not clustered_submissions:
+            print("   - Analysis complete, but no significant clusters were found. Exiting.")
+            return {"status": "success", "message": "Analysis complete, but no clusters were formed."}
+
+        print(f"   - Identified {len(clustered_submissions)} clusters (excluding noise).")
+
+    except Exception as e:
+        print(f"❌ Error during AI analysis: {e}")
+        raise HTTPException(status_code=500, detail="An error occurred during AI analysis.")
+
     # 3. Generate: For top clusters, use LLM to create thread title and post
     # 4. Publish & Archive: Write new threads and archive old submissions atomically
 
