@@ -78,7 +78,7 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
               },
             ),
           ),
-          _buildReplyComposer(),
+          SafeArea(child: _buildReplyComposer()),
         ],
       ),
     );
