@@ -21,7 +21,7 @@ class _MainAppShellState extends State<MainAppShell> {
     const AccountScreen(),
   ];
 
-  static const List<String> _titles = <String>['Chats', 'Account'];
+  static const List<String> _titles = <String>['Home', 'Account'];
 
   void _onItemTapped(int index) {
     setState(() {
@@ -48,9 +48,9 @@ class _MainAppShellState extends State<MainAppShell> {
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline),
-            activeIcon: Icon(Icons.chat_bubble),
-            label: 'Chats',
+            icon: Icon(Icons.home_outlined),
+            activeIcon: Icon(Icons.home),
+            label: 'Home',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
