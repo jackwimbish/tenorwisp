@@ -168,6 +168,56 @@ async def trigger_generation_round():
         raise HTTPException(status_code=500, detail="An error occurred during AI analysis.")
 
     # 3. Generate: For top clusters, use LLM to create thread title and post
-    # 4. Publish & Archive: Write new threads and archive old submissions atomically
+    print("3. Generating content for top clusters...")
+
+    # Sort clusters by size to process the most popular topics
+    sorted_clusters = sorted(clustered_submissions.items(), key=lambda item: len(item[1]), reverse=True)
+
+    # Process the top 3 clusters (or fewer if there aren't that many)
+    for cluster_id, submissions_in_cluster in sorted_clusters[:3]:
+        print(f"   - Processing cluster {cluster_id} with {len(submissions_in_cluster)} members...")
+
+        # Consolidate text for the LLM prompt
+        consolidated_text = "\\n---\\n".join([sub['text'] for sub in submissions_in_cluster])
+
+        # Build a detailed prompt using the OpenAI Chat Completions format
+        system_prompt = "You are a community moderator. Your goal is to synthesize user ideas into engaging discussion topics."
+        user_prompt = (
+            "Based on the following user thoughts, all centered on a similar theme, perform two tasks:\n"
+            "1. Create a single, neutral, open-ended discussion question that captures the core idea.\n"
+            "2. Write a short, engaging initial post to kick off the thread, referencing the collective thought.\n\n"
+            "The user thoughts are:\n"
+            "---\n"
+            f"{consolidated_text}\n"
+            "---\n\n"
+            'Format your entire response as a single, valid JSON object with two keys: "title" and "initial_post".'
+        )
+
+        try:
+            # Generate content using OpenAI's API
+            response = openai.chat.completions.create(
+                model="gpt-4.1-2025-04-14",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                response_format={"type": "json_object"}  # Use JSON mode for reliable output
+            )
+
+            # The response content is a JSON string, so we parse it.
+            response_content = response.choices[0].message.content
+            generated_content = json.loads(response_content)
+            thread_title = generated_content['title']
+            initial_post_text = generated_content['initial_post']
+
+            print(f"     - Generated Title: {thread_title}")
+
+            # 4. Publish & Archive: Write new threads and archive old submissions atomically
+            # ... LOGIC FOR STEP 6 WILL GO HERE ...
+
+        except (json.JSONDecodeError, KeyError, openai.APIError) as e:
+            print(f"     - ❌ Error processing LLM response for cluster {cluster_id}: {e}")
+            continue  # Skip to the next cluster if one fails
+
 
     return {"status": "success", "message": "Topic generation process completed."} 
