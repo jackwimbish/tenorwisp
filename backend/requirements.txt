@@ -1,3 +1,13 @@
+# Web server
 fastapi
 uvicorn
-python-dotenv 
+python-dotenv
+
+# Firebase
+firebase-admin
+
+# AI & Data Processing
+sentence-transformers
+hdbscan
+numpy
+openai 
