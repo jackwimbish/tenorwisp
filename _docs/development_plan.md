@@ -75,8 +75,8 @@ Modify your `start_generation_round` function in the FastAPI backend:
 
 1. **Fetch:** Use the Firebase Admin SDK to query the `submissions` collection for all documents `where("status", "==", "live")`
 2. **Analyze:** Perform the vectorization (sentence-transformers) and clustering (hdbscan) on the fetched data
-3. **Generate:** For the top 2-3 clusters, consolidate the text and make API calls to your chosen LLM (e.g., GPT4.1) to generate engaging topic titles
-4. **Publish:** Write these new topic titles as documents into a new `public_threads` collection
+3. **Generate:** For the top 2-3 clusters, consolidate the text and make API calls to your chosen LLM (e.g., GPT4.1) to generate both an engaging topic **title** and a compelling **initial post**.
+4. **Publish:** Write the new topic titles as documents into a new `public_threads` collection, and create the initial post within a `posts` sub-collection for each new thread.
 
 ### Implement Archiving Process
 

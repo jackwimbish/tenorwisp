@@ -32,7 +32,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # --- Configuration ---
-NUM_USERS_TO_CREATE = 30
+NUM_USERS_TO_CREATE = 50
 OUTPUT_FILE = 'fake_users.json'
 
 # --- Initialize Firebase Admin SDK ---
@@ -59,31 +59,45 @@ def create_users():
         try:
             email = fake.unique.email()
             password = fake.password(length=12, special_chars=True, digits=True, upper_case=True, lower_case=True)
-            display_name = fake.name()
+            username = fake.user_name()
 
             # 1. Create user in Firebase Authentication
             user = auth.create_user(
                 email=email,
                 password=password,
-                display_name=display_name
+                display_name=username
             )
             print(f"Successfully created user: {user.uid} ({email})")
 
-            # 2. Create a corresponding document in the 'users' collection in Firestore
+            # 2. Use a batched write to create both Firestore documents atomically
+            batch = db.batch()
+            
+            # Create the main user document in the 'users' collection
             user_doc_ref = db.collection('users').document(user.uid)
-            user_doc_ref.set({
-                'displayName': display_name,
+            batch.set(user_doc_ref, {
+                'username': username,
                 'email': email,
-                'live_submission_id': None  # Initialize as null
+                'live_submission_id': None,
+                'photoURL': f"https://api.dicebear.com/8.x/adventurer/svg?seed={username}",
+                'friends': [],
+                'friendRequestsSent': [],
+                'friendRequestsReceived': []
             })
-            print(f"  - Created Firestore document for user {user.uid}")
+
+            # Create the username uniqueness document in the 'usernames' collection
+            username_ref = db.collection('usernames').document(username.lower())
+            batch.set(username_ref, {'uid': user.uid})
+            
+            # Commit the atomic batch
+            batch.commit()
+            print(f"  - Created Firestore documents for user {user.uid}")
 
             # 3. Store details for later use
             users_data.append({
                 'uid': user.uid,
                 'email': email,
                 'password': password,
-                'displayName': display_name
+                'username': username
             })
 
         except Exception as e:

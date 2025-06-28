@@ -118,9 +118,9 @@ def generate_and_submit():
                 # Get the next available user
                 current_user = next(user_pool)
                 uid = current_user['uid']
-                display_name = current_user['displayName']
+                username = current_user['username']
 
-                print(f"Processing for user: {display_name} ({uid})")
+                print(f"Processing for user: {username} ({uid})")
 
                 # 3. Generate a unique submission using the LLM
                 print("  - Generating text with LLM...")
