@@ -12,13 +12,24 @@ load_dotenv()
 RAILWAY_URL = os.getenv("RAILWAY_APP_URL")
 SECRET_KEY = os.getenv("BACKEND_SECRET_KEY")
 
+# --- Target Server Logic ---
+# Check if we should use the local development server
+USE_DEV = os.getenv("USE_DEV_SERVER", "false").lower() == "true"
+
+if USE_DEV:
+    API_BASE_URL = "http://127.0.0.1:8000"
+    print("--- 🎯 USING LOCAL DEVELOPMENT SERVER ---")
+else:
+    API_BASE_URL = RAILWAY_URL
+    print("--- 🚀 USING PRODUCTION RAILWAY SERVER ---")
+
 def trigger_backend_process():
-    """Sends a secure POST request to the deployed backend to start the process."""
-    if not RAILWAY_URL or not SECRET_KEY:
-        print("Error: Please set RAILWAY_APP_URL and BACKEND_SECRET_KEY in your .env file.")
+    """Sends a secure POST request to the configured backend to start the process."""
+    if not API_BASE_URL or not SECRET_KEY:
+        print("Error: Please set required environment variables (SECRET_KEY and either RAILWAY_APP_URL or USE_DEV_SERVER).")
         return
 
-    endpoint = f"{RAILWAY_URL}/api/admin/start_generation_round"
+    endpoint = f"{API_BASE_URL}/api/admin/start_generation_round"
     headers = {
         "X-API-Key": SECRET_KEY
     }

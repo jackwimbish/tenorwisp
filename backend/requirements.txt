@@ -11,3 +11,6 @@ sentence-transformers
 hdbscan
 numpy
 openai 
+
+# testing & demos
+faker
