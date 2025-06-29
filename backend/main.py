@@ -213,7 +213,44 @@ async def trigger_generation_round():
             print(f"     - Generated Title: {thread_title}")
 
             # 4. Publish & Archive: Write new threads and archive old submissions atomically
-            # ... LOGIC FOR STEP 6 WILL GO HERE ...
+            print("4. Publishing new thread and archiving submissions...")
+            batch = db.batch()
+
+            # A. Create the new public thread document
+            new_thread_ref = db.collection('public_threads').document()
+            batch.set(new_thread_ref, {
+                'title': thread_title,
+                'generatedAt': firestore.SERVER_TIMESTAMP,
+                'cluster_topic': f"Cluster {cluster_id}"  # Simple identifier for now
+            })
+
+            # B. Create the initial AI-generated post in the sub-collection
+            initial_post_ref = new_thread_ref.collection('posts').document()
+            batch.set(initial_post_ref, {
+                'postText': initial_post_text,
+                'author_uid': None,
+                'author_username': "Thread Starter",
+                'author_photoURL': "https://api.dicebear.com/8.x/bottts/svg", # A generic bot icon
+                'createdAt': firestore.SERVER_TIMESTAMP
+            })
+
+            # C. Loop through the submissions in THIS cluster to archive them
+            for submission in submissions_in_cluster:
+                sub_ref = db.collection('submissions').document(submission['id'])
+                batch.update(sub_ref, {'status': 'archived'})
+
+                # Also update the corresponding user's profile
+                user_ref = db.collection('users').document(submission['author_uid'])
+                batch.update(user_ref, {'live_submission_id': None})
+
+            # D. Commit the entire batch of operations
+            try:
+                batch.commit()
+                print(f"   - ✅ Successfully published thread and archived {len(submissions_in_cluster)} submissions.")
+            except Exception as e:
+                print(f"   - ❌ Error committing batch for cluster {cluster_id}: {e}")
+                # If the batch fails, we should continue to the next cluster
+                continue
 
         except (json.JSONDecodeError, KeyError, openai.APIError) as e:
             print(f"     - ❌ Error processing LLM response for cluster {cluster_id}: {e}")
