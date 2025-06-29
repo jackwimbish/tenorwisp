@@ -34,7 +34,7 @@ class _UsersListScreenState extends State<UsersListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Messages")),
+      appBar: AppBar(title: const Text("Chats")),
       body: StreamBuilder<QuerySnapshot>(
         stream: _chatsStream,
         builder: (context, snapshot) {
