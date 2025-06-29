@@ -52,11 +52,24 @@ SUBMISSIONS_LOG_FILE = 'generated_submissions_log.json'
 # --- Initialize Firebase Admin SDK ---
 if not firebase_admin._apps:
     try:
-        cred = credentials.ApplicationDefault()
+        print("Initializing Firebase for submission generation script...")
+        service_account_json_str = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+        if service_account_json_str:
+            # Production-style: From environment variable
+            print("   - Using service account from environment variable.")
+            service_account_info = json.loads(service_account_json_str)
+            cred = credentials.Certificate(service_account_info)
+        else:
+            # Development-style: From local file path in .env
+            print("   - Using service account from local file path (GOOGLE_APPLICATION_CREDENTIALS).")
+            if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+                raise ValueError("GOOGLE_APPLICATION_CREDENTIALS not set for local development.")
+            cred = credentials.ApplicationDefault()
+
         firebase_admin.initialize_app(cred)
-        print("Firebase Admin SDK initialized successfully.")
+        print("✅ Firebase initialized successfully.")
     except Exception as e:
-        print(f"Error initializing Firebase Admin SDK: {e}")
+        print(f"❌ Error initializing Firebase: {e}")
         exit()
 
 # --- Initialize OpenAI API ---

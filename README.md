@@ -38,6 +38,9 @@ Before you can build the app, you need to configure its connection to Firebase. 
 ### 2. Run the Flutter App (Frontend)
 
 Once Firebase is configured, you can run the Flutter application.
+If you don't already have it installed, you'll need the Flutter CLI: On mac: `brew install flutter` or use the [official installation](https://docs.flutter.dev/get-started/install)
+
+Then you can proceed with the following:
 
 1.  **Get Dependencies:**
     Navigate to the project's root directory and run the following command to fetch all the necessary Flutter packages:
@@ -52,6 +55,25 @@ Once Firebase is configured, you can run the Flutter application.
     ```
     Alternatively, you can run the app directly from your IDE (like VS Code or Android Studio) if you have the Flutter plugin installed.
 
-### 3. Run the AI Service (Backend)
+### 3. Run the Backend
 
-The backend service is not required for the messaging features to work, but it is necessary for the AI topic generation. For instructions on running the Python backend locally or triggering the deployed service, please see `_docs/implementation-phase-1.md`.
+The backend service currently deployed on Railway, so there is no need to run it locally to test the app. If you still want to run it locally:
+
+Set up a virtualenv and install Python libraries:
+`python -m venv venv`
+`source venv/bin/activate`
+`pip install -r backend/requirements.txt`
+
+Then to run a local development server:
+`uvicorn backend.main:app`
+
+In different terminal window, to test the AI topic generation functionality you can do the following:
+
+Clear the current threads and proposed topic submissions (optional)
+`python clear_generated_data.py`
+
+Generate and submit some fake topic ideas for the users:
+`python generate_submissions.py`
+
+Now you can trigger the AI thread generation process:
+`python trigger_generation.py`

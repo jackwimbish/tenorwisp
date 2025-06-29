@@ -37,14 +37,24 @@ OUTPUT_FILE = 'fake_users.json'
 
 # --- Initialize Firebase Admin SDK ---
 try:
-    # This automatically finds the credentials from the GOOGLE_APPLICATION_CREDENTIALS
-    # environment variable loaded by load_dotenv().
-    cred = credentials.ApplicationDefault()
+    print("Initializing Firebase for user creation script...")
+    service_account_json_str = os.getenv("FIREBASE_SERVICE_ACCOUNT_JSON")
+    if service_account_json_str:
+        # Production-style: From environment variable
+        print("   - Using service account from environment variable.")
+        service_account_info = json.loads(service_account_json_str)
+        cred = credentials.Certificate(service_account_info)
+    else:
+        # Development-style: From local file path in .env
+        print("   - Using service account from local file path (GOOGLE_APPLICATION_CREDENTIALS).")
+        if not os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
+             raise ValueError("GOOGLE_APPLICATION_CREDENTIALS not set for local development.")
+        cred = credentials.ApplicationDefault()
+
     firebase_admin.initialize_app(cred)
-    print("Firebase Admin SDK initialized successfully.")
+    print("✅ Firebase initialized successfully.")
 except Exception as e:
-    print(f"Error initializing Firebase Admin SDK: {e}")
-    print("Please ensure you have created a .env file and set the GOOGLE_APPLICATION_CREDENTIALS variable correctly.")
+    print(f"❌ Error initializing Firebase: {e}")
     exit()
 
 db = firestore.client()
