@@ -38,14 +38,16 @@ load_dotenv()
 # Define the topics and how many users should post about each.
 # The script will assign users randomly.
 SUBMISSION_CONFIG = {
-    "AI's potential to cause widespread unemployment in creative fields": 8,
-    "The idea that AI will usher in a new golden age of human prosperity and creativity": 8,
-    "Recent scientific breakthroughs in human longevity and anti-aging": 7,
+    "AI's potential to cause widespread unemployment in creative fields": 11,
+    "Should genetic enhancement technologies should be regulated globally or left to individual countries and markets": 9,
+    "Recent scientific breakthroughs in human longevity and anti-aging": 8,
     "The social and psychological impact of AI-powered romantic companions": 5,
+    "The idea that AI will usher in a new golden age of human prosperity and creativity": 4,
     "The simple, uncomplicated joy of pet cats": 2
 }
 
 INPUT_USER_FILE = 'fake_users.json'
+SUBMISSIONS_LOG_FILE = 'generated_submissions_log.json'
 
 # --- Initialize Firebase Admin SDK ---
 if not firebase_admin._apps:
@@ -82,7 +84,7 @@ def get_llm_generated_submission(topic):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.7, # A little creativity
+            temperature=0.9, # A little more creativity
             max_tokens=100
         )
         return response.choices[0].message.content.strip()
@@ -109,6 +111,7 @@ def generate_and_submit():
     # Shuffle users to ensure random assignment for each run
     random.shuffle(users)
     user_pool = iter(users) # Use an iterator to easily grab the next available user
+    generated_submissions_log = []
 
     # 2. Loop through the submission configuration
     for topic, count in SUBMISSION_CONFIG.items():
@@ -149,14 +152,31 @@ def generate_and_submit():
                 batch.commit()
                 print(f"  - Atomically created submission and updated user profile.")
 
+                # 8. Log the generated submission for review
+                generated_submissions_log.append({
+                    'topic': topic,
+                    'username': username,
+                    'uid': uid,
+                    'submission_id': submission_ref.id,
+                    'generated_text': submission_text
+                })
+
                 # Small delay to avoid hitting API rate limits
                 time.sleep(1.5)
 
             except StopIteration:
                 print("\nWarning: Ran out of fake users. Not all configured submissions were created.")
-                return
+                break # Exit the loop
             except Exception as e:
                 print(f"An error occurred while processing a submission: {e}")
+
+    # 9. Save the log file at the end
+    try:
+        with open(SUBMISSIONS_LOG_FILE, 'w') as f:
+            json.dump(generated_submissions_log, f, indent=4)
+        print(f"\n✅ Successfully saved {len(generated_submissions_log)} submission logs to {SUBMISSIONS_LOG_FILE}.")
+    except Exception as e:
+        print(f"\n❌ Error saving log file: {e}")
 
     print("\nAll submissions generated successfully.")
 

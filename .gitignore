@@ -67,3 +67,5 @@ build/
 /ios/Runner/GoogleService-Info.plist
 /lib/firebase_options.dart
 /android/app/google-services.json
+
+generated_submissions_log.json
