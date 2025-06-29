@@ -40,7 +40,21 @@ class _MainAppShellState extends State<MainAppShell> {
           if (user != null)
             Padding(
               padding: const EdgeInsets.only(right: 12.0),
-              child: UserAvatar(userId: user.uid),
+              child: StreamBuilder<DocumentSnapshot>(
+                stream: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .snapshots(),
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const CircleAvatar(radius: 20);
+                  }
+                  final photoURL =
+                      (snapshot.data!.data()
+                          as Map<String, dynamic>?)?['photoURL'];
+                  return UserAvatar(photoURL: photoURL, radius: 20);
+                },
+              ),
             ),
         ],
       ),
