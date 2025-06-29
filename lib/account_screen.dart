@@ -124,6 +124,9 @@ class _AccountScreenState extends State<AccountScreen> {
           final userData = snapshot.data!.data() as Map<String, dynamic>?;
           final username = userData?['username'] ?? 'No username';
           final photoURL = userData?['photoURL'];
+          final friendRequests =
+              (userData?['friendRequestsReceived'] as List<dynamic>?) ?? [];
+          final pendingRequestCount = friendRequests.length;
 
           // Set initial text for the controller only if it's not already set by the user
           if (_usernameController.text.isEmpty ||
@@ -184,7 +187,11 @@ class _AccountScreenState extends State<AccountScreen> {
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.people_outline),
-                title: const Text('Friends'),
+                title: Text(
+                  pendingRequestCount > 0
+                      ? 'Friends ($pendingRequestCount)'
+                      : 'Friends',
+                ),
                 trailing: const Icon(Icons.arrow_forward_ios),
                 onTap: () {
                   Navigator.of(context).push(

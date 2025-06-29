@@ -21,7 +21,15 @@ service cloud.firestore {
       // is sufficient to allow a user to update their own 'live_submission_id'.
       // All existing friend request logic is preserved.
       allow update: if request.auth != null && (
+        // A user can update their own document
         request.auth.uid == userId ||
+        // A user can remove themselves from another user's friend list (unfriend)
+        (
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friends']) &&
+          resource.data.friends.size() - request.resource.data.friends.size() == 1 &&
+          request.auth.uid in resource.data.friends &&
+          !(request.auth.uid in request.resource.data.friends)
+        ) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendRequestsReceived']) && request.resource.data.friendRequestsReceived.size() == resource.data.get('friendRequestsReceived', []).size() + 1 && request.auth.uid in request.resource.data.friendRequestsReceived) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasAll(['friends', 'friendRequestsSent']) && request.resource.data.diff(resource.data).affectedKeys().size() == 2 && request.auth.uid in resource.data.friendRequestsSent) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['friendRequestsSent']) && request.auth.uid in resource.data.friendRequestsSent && !(request.auth.uid in request.resource.data.friendRequestsSent))

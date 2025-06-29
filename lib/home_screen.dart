@@ -7,6 +7,7 @@ import 'package:tenorwisp/account_screen.dart';
 import 'package:tenorwisp/users_list_screen.dart';
 import 'package:tenorwisp/submission_screen.dart';
 import 'package:tenorwisp/public_threads_screen.dart';
+import 'package:tenorwisp/friends_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -33,6 +34,9 @@ class HomeScreen extends StatelessWidget {
 
             final userData = snapshot.data?.data();
             final username = userData?['username'] as String?;
+            final friendRequests =
+                (userData?['friendRequestsReceived'] as List<dynamic>?) ?? [];
+            final pendingRequestCount = friendRequests.length;
 
             return Center(
               child: ConstrainedBox(
@@ -97,6 +101,37 @@ class HomeScreen extends StatelessWidget {
                         textStyle: Theme.of(context).textTheme.titleMedium,
                       ),
                     ),
+                    if (pendingRequestCount > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 24.0),
+                        child: ElevatedButton.icon(
+                          icon: const Icon(Icons.person_add_alt_1_outlined),
+                          label: Text(
+                            pendingRequestCount == 1
+                                ? '(1) Pending Friend Request'
+                                : '($pendingRequestCount) Pending Friend Requests',
+                          ),
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) =>
+                                    const FriendsScreen(initialTabIndex: 1),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).colorScheme.tertiary,
+                            foregroundColor: Theme.of(
+                              context,
+                            ).colorScheme.onTertiary,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            textStyle: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),

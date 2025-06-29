@@ -3,8 +3,9 @@ import 'package:flutter_svg/flutter_svg.dart';
 
 class PostBubble extends StatelessWidget {
   final Map<String, dynamic> postData;
+  final Function(String authorId)? onAuthorTapped;
 
-  const PostBubble({super.key, required this.postData});
+  const PostBubble({super.key, required this.postData, this.onAuthorTapped});
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +57,26 @@ class PostBubble extends StatelessWidget {
                 : const Icon(Icons.person),
           );
 
+    final authorInfo = Row(
+      children: [
+        avatar,
+        const SizedBox(width: 12.0),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                authorName,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
       padding: const EdgeInsets.all(12.0),
@@ -68,25 +89,26 @@ class PostBubble extends StatelessWidget {
             ? Border.all(color: theme.colorScheme.outlineVariant)
             : null,
       ),
-      child: Row(
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          avatar,
-          const SizedBox(width: 12.0),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  authorName,
-                  style: theme.textTheme.titleSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 4.0),
-                Text(postData['postText'] ?? ''),
-              ],
+          if (isAIPost)
+            authorInfo
+          else
+            GestureDetector(
+              onTap: () {
+                if (onAuthorTapped != null) {
+                  onAuthorTapped!(postData['author_uid']);
+                }
+              },
+              child: authorInfo,
             ),
+          const SizedBox(height: 8.0),
+          Padding(
+            padding: const EdgeInsets.only(
+              left: 52.0,
+            ), // Aligns text with avatar
+            child: Text(postData['postText'] ?? ''),
           ),
         ],
       ),

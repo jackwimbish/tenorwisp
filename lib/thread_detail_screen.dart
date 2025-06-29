@@ -3,6 +3,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:tenorwisp/widgets/post_bubble.dart';
+import 'package:tenorwisp/service_locator.dart';
+import 'package:tenorwisp/services/user_service.dart';
+import 'package:tenorwisp/services/auth_service.dart';
 
 class ThreadDetailScreen extends StatefulWidget {
   final String threadId;
@@ -15,9 +18,11 @@ class ThreadDetailScreen extends StatefulWidget {
 
 class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
   final _commentController = TextEditingController();
+  final UserService _userService = getIt<UserService>();
+  final AuthService _authService = getIt<AuthService>();
 
   Future<void> _postComment() async {
-    final authUser = FirebaseAuth.instance.currentUser;
+    final authUser = _userService.currentUser;
     final text = _commentController.text.trim();
 
     if (authUser == null || text.isEmpty) return;
@@ -46,6 +51,83 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
 
     _commentController.clear();
     FocusScope.of(context).unfocus();
+  }
+
+  Future<void> _showFriendRequestDialog(String authorId) async {
+    final currentUser = _userService.currentUser;
+    if (currentUser == null || currentUser.uid == authorId) {
+      return;
+    }
+
+    // Check if a request has already been sent or if they are already friends
+    final userDoc = await _userService.getUserDocStream(currentUser.uid).first;
+    final userData = userDoc.data() as Map<String, dynamic>?;
+    final sentRequests =
+        (userData?['friendRequestsSent'] as List?)?.cast<String>() ?? [];
+    final friends = (userData?['friends'] as List?)?.cast<String>() ?? [];
+
+    if (sentRequests.contains(authorId)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Friend request already sent.')),
+      );
+      return;
+    }
+
+    if (friends.contains(authorId)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('You are already friends.')));
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Send Friend Request?'),
+          content: const Text(
+            'Do you want to send a friend request to this user?',
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(context).pop();
+              },
+            ),
+            TextButton(
+              child: const Text('Send'),
+              onPressed: () async {
+                try {
+                  await _userService.sendFriendRequest(authorId);
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Friend request sent successfully!'),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (mounted) {
+                    Navigator.of(context).pop();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Failed to send request: ${e.toString()}',
+                        ),
+                      ),
+                    );
+                  }
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -88,7 +170,10 @@ class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
                     final postData =
                         posts[index].data() as Map<String, dynamic>;
                     // Use our new PostBubble widget for each post
-                    return PostBubble(postData: postData);
+                    return PostBubble(
+                      postData: postData,
+                      onAuthorTapped: _showFriendRequestDialog,
+                    );
                   },
                 );
               },

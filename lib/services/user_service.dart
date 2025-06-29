@@ -127,4 +127,25 @@ class UserService {
     });
     await batch.commit();
   }
+
+  Future<void> removeFriend(String friendId) async {
+    final user = currentUser;
+    if (user == null) throw Exception("User not logged in");
+
+    final batch = _firestore.batch();
+
+    // Remove friend from current user's list
+    final currentUserRef = _firestore.collection('users').doc(user.uid);
+    batch.update(currentUserRef, {
+      'friends': FieldValue.arrayRemove([friendId]),
+    });
+
+    // Remove current user from friend's list
+    final friendRef = _firestore.collection('users').doc(friendId);
+    batch.update(friendRef, {
+      'friends': FieldValue.arrayRemove([user.uid]),
+    });
+
+    await batch.commit();
+  }
 }
