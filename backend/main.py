@@ -210,40 +210,43 @@ async def trigger_generation_round():
             thread_title = generated_content['title']
             initial_post_text = generated_content['initial_post']
 
-            print(f"     - Generated Title: {thread_title}")
+            print(f'     - Generated Title: "{thread_title}"')
 
-            # 4. Publish & Archive: Write new threads and archive old submissions atomically
-            print("4. Publishing new thread and archiving submissions...")
+            # 4. Publish: Atomically create the new thread and its starter post
+            # We will also archive all the submissions used to create this thread.
+            print("   - Writing new thread to Firestore and archiving submissions...")
+            
+            # Start a batched write for atomic operations
             batch = db.batch()
 
-            # A. Create the new public thread document
+            # Create the new document in `public_threads`
             new_thread_ref = db.collection('public_threads').document()
             batch.set(new_thread_ref, {
                 'title': thread_title,
-                'generatedAt': firestore.SERVER_TIMESTAMP,
-                'cluster_topic': f"Cluster {cluster_id}"  # Simple identifier for now
+                'generatedAt': firestore.SERVER_TIMESTAMP  # Add timestamp for sorting
             })
 
-            # B. Create the initial AI-generated post in the sub-collection
+            # Create the initial post in the `posts` sub-collection
             initial_post_ref = new_thread_ref.collection('posts').document()
             batch.set(initial_post_ref, {
                 'postText': initial_post_text,
-                'author_uid': None,
-                'author_username': "Thread Starter",
+                'author_uid': None, # Explicitly null for AI posts
+                'author_username': 'Thread Starter',
                 'author_photoURL': "https://api.dicebear.com/8.x/bottts/svg", # A generic bot icon
-                'createdAt': firestore.SERVER_TIMESTAMP
+                'createdAt': firestore.SERVER_TIMESTAMP # Add timestamp for sorting
             })
 
-            # C. Loop through the submissions in THIS cluster to archive them
-            for submission in submissions_in_cluster:
-                sub_ref = db.collection('submissions').document(submission['id'])
+            # 5. Archive: Mark all processed submissions as "archived"
+            # and clear the user's live_submission_id
+            for sub in submissions_in_cluster:
+                sub_ref = db.collection('submissions').document(sub['id'])
                 batch.update(sub_ref, {'status': 'archived'})
 
                 # Also update the corresponding user's profile
-                user_ref = db.collection('users').document(submission['author_uid'])
+                user_ref = db.collection('users').document(sub['author_uid'])
                 batch.update(user_ref, {'live_submission_id': None})
 
-            # D. Commit the entire batch of operations
+            # Commit the entire batch of operations
             try:
                 batch.commit()
                 print(f"   - ✅ Successfully published thread and archived {len(submissions_in_cluster)} submissions.")

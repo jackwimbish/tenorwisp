@@ -1,119 +1,119 @@
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:timeago/timeago.dart' as timeago;
+import 'package:tenorwisp/widgets/post_bubble.dart';
 
 class ThreadDetailScreen extends StatefulWidget {
-  final String threadTitle;
+  final String threadId;
 
-  const ThreadDetailScreen({super.key, required this.threadTitle});
+  const ThreadDetailScreen({super.key, required this.threadId});
 
   @override
   State<ThreadDetailScreen> createState() => _ThreadDetailScreenState();
 }
 
 class _ThreadDetailScreenState extends State<ThreadDetailScreen> {
-  final TextEditingController _replyController = TextEditingController();
+  final _commentController = TextEditingController();
+
+  Future<void> _postComment() async {
+    final authUser = FirebaseAuth.instance.currentUser;
+    final text = _commentController.text.trim();
+
+    if (authUser == null || text.isEmpty) return;
+
+    // Fetch the user's profile from the 'users' collection
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(authUser.uid)
+        .get();
+    final userData = userDoc.data();
+
+    final username = userData?['username'] ?? 'Anonymous';
+    final photoURL = userData?['photoURL'];
+
+    await FirebaseFirestore.instance
+        .collection('public_threads')
+        .doc(widget.threadId)
+        .collection('posts')
+        .add({
+          'postText': text,
+          'author_uid': authUser.uid,
+          'author_username': username,
+          'author_photoURL': photoURL,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+
+    _commentController.clear();
+    FocusScope.of(context).unfocus();
+  }
 
   @override
   void dispose() {
-    _replyController.dispose();
+    _commentController.dispose();
     super.dispose();
   }
-
-  // Dummy data for posts, including text and images
-  static final List<Map<String, dynamic>> _dummyPosts = [
-    {
-      'type': 'text',
-      'author_username': 'AI_Enthusiast',
-      'postText':
-          'I think it will be a powerful new tool for artists, not a replacement. It opens up entirely new mediums.',
-      'createdAt': DateTime.now().subtract(const Duration(minutes: 55)),
-    },
-    {
-      'type': 'text',
-      'author_username': 'Art_Historian',
-      'postText':
-          'This whole debate feels very similar to the initial reaction to photography in the 19th century. Many painters thought it was the end of their craft.',
-      'createdAt': DateTime.now().subtract(const Duration(minutes: 48)),
-    },
-    {
-      'type': 'image',
-      'author_username': 'VisualThinker',
-      'imageUrl': 'https://picsum.photos/seed/abstractart/600/400',
-      'postText': 'Here\'s an example of what can be created.',
-      'createdAt': DateTime.now().subtract(const Duration(minutes: 30)),
-    },
-    {
-      'type': 'text',
-      'author_username': 'DeepThought',
-      'postText':
-          'The real question is about intent and authorship. If an AI generates an image, who is the artist? The AI, the person who wrote the prompt, or the developers who built the model?',
-      'createdAt': DateTime.now().subtract(const Duration(minutes: 25)),
-    },
-    {
-      'type': 'image',
-      'author_username': 'Old_Master',
-      'imageUrl': 'https://picsum.photos/seed/renaissance/600/400',
-      'postText': 'A timeless classic for comparison.',
-      'createdAt': DateTime.now().subtract(const Duration(minutes: 10)),
-    },
-  ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.threadTitle),
+        title: const Text("Thread"), // Placeholder title
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
       ),
       body: Column(
         children: [
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(8.0),
-              itemCount: _dummyPosts.length,
-              itemBuilder: (context, index) {
-                final post = _dummyPosts[index];
-                return _PostWidget(post: post);
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('public_threads')
+                  .doc(widget.threadId)
+                  .collection('posts')
+                  .orderBy('createdAt')
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(child: Text("No posts yet."));
+                }
+
+                final posts = snapshot.data!.docs;
+
+                return ListView.builder(
+                  itemCount: posts.length,
+                  itemBuilder: (context, index) {
+                    final postData =
+                        posts[index].data() as Map<String, dynamic>;
+                    // Use our new PostBubble widget for each post
+                    return PostBubble(postData: postData);
+                  },
+                );
               },
             ),
           ),
-          SafeArea(child: _buildReplyComposer()),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildReplyComposer() {
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _replyController,
-              decoration: const InputDecoration(
-                hintText: 'Post your reply...',
-                border: OutlineInputBorder(),
-                contentPadding: EdgeInsets.symmetric(horizontal: 12.0),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _commentController,
+                      decoration: const InputDecoration(
+                        hintText: "Add a comment...",
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.send),
+                    onPressed: _postComment,
+                  ),
+                ],
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.send),
-            onPressed: () {
-              if (_replyController.text.isNotEmpty) {
-                _replyController.clear();
-                FocusScope.of(context).unfocus(); // Hide keyboard
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Replying is not yet implemented.'),
-                    duration: Duration(seconds: 2),
-                  ),
-                );
-              }
-            },
           ),
         ],
       ),
