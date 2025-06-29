@@ -84,7 +84,7 @@ def get_llm_generated_submission(topic):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=0.9, # A little more creativity
+            temperature=1.3, # A little more creativity
             max_tokens=100
         )
         return response.choices[0].message.content.strip()

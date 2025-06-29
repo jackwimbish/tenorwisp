@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 class PostBubble extends StatelessWidget {
   final Map<String, dynamic> postData;
@@ -25,12 +26,34 @@ class PostBubble extends StatelessWidget {
             ),
           )
         : CircleAvatar(
-            backgroundImage: (photoURL != null && photoURL.isNotEmpty)
-                ? NetworkImage(photoURL)
-                : null,
-            child: (photoURL == null || photoURL.isEmpty)
-                ? const Icon(Icons.person)
-                : null,
+            child: (photoURL != null && photoURL.isNotEmpty)
+                ? ClipOval(
+                    child: _isSvgUrl(photoURL)
+                        ? SvgPicture.network(
+                            photoURL,
+                            fit: BoxFit.cover,
+                            placeholderBuilder: (context) => const Center(
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.0,
+                              ),
+                            ),
+                          )
+                        : Image.network(
+                            photoURL,
+                            fit: BoxFit.cover,
+                            loadingBuilder: (context, child, progress) {
+                              if (progress == null) return child;
+                              return const Center(
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.0,
+                                ),
+                              );
+                            },
+                            errorBuilder: (context, error, stackTrace) =>
+                                const Icon(Icons.person),
+                          ),
+                  )
+                : const Icon(Icons.person),
           );
 
     return Container(
@@ -68,5 +91,15 @@ class PostBubble extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  bool _isSvgUrl(String urlString) {
+    try {
+      final uri = Uri.parse(urlString);
+      return uri.path.endsWith('.svg') || uri.path.endsWith('/svg');
+    } catch (e) {
+      // If parsing fails, treat it as not an SVG
+      return false;
+    }
   }
 }

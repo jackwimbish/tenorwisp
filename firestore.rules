@@ -65,8 +65,17 @@ service cloud.firestore {
     // --- PUBLIC THREADS RULES (NEW) ---
     // This new block is added for Phase 3.
     match /public_threads/{threadId} {
-        allow read: if true;
-        allow write: if false; // Only the backend can write here
+      allow read: if request.auth != null; // Any authenticated user can see the list of threads
+      allow write: if false; // Only the backend can write here
+
+      // New rule: Allow authenticated users to interact with posts.
+      match /posts/{postId} {
+        // Any authenticated user can read any post and create new ones.
+        allow read, create: if request.auth != null;
+
+        // A user can only update or delete a post they authored.
+        allow update, delete: if request.auth.uid == resource.data.author_uid;
+      }
     }
   }
 }
