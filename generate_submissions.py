@@ -38,13 +38,21 @@ load_dotenv()
 # Define the topics and how many users should post about each.
 # The script will assign users randomly.
 SUBMISSION_CONFIG = {
-    "AI's potential to cause widespread unemployment in creative fields": 11,
-    "Should genetic enhancement technologies should be regulated globally or left to individual countries and markets": 9,
+    "Should we preserve 'human-only' spaces and activities in an increasingly automated world?": 11,
+    "Would a post-scarcity economy powered by advanced automation be utopian or dystopian?": 9,
     "Recent scientific breakthroughs in human longevity and anti-aging": 8,
-    "The social and psychological impact of AI-powered romantic companions": 5,
-    "The idea that AI will usher in a new golden age of human prosperity and creativity": 4,
+    "Will virtual and augmented reality make us more empathetic or more isolated?": 5,
+    "The social and psychological impact of AI-powered romantic companions": 4,
     "The simple, uncomplicated joy of pet cats": 2
 }
+#SUBMISSION_CONFIG = {
+#    "Are we becoming less creative as individuals due to algorithm-curated content?": 11,
+#    "Will brain-computer interfaces fundamentally change human identity and what it means to be 'you'?": 9,
+#    "Should we treat advanced AI systems as tools, partners, or something entirely new?": 8,
+#    "Is the decline of physical books and handwriting diminishing our cognitive abilities?": 5,
+#    "Should we attempt to communicate with or visit other intelligent species if we discover them?": 4,
+#    "The simple, uncomplicated joy of pet dogs": 2
+#}
 
 INPUT_USER_FILE = 'fake_users.json'
 SUBMISSIONS_LOG_FILE = 'generated_submissions_log.json'
@@ -87,8 +95,8 @@ db = firestore.client()
 
 def get_llm_generated_submission(topic):
     """Generates a unique, user-like submission for a given topic using the OpenAI API."""
-    system_prompt = "You are a regular person thinking about a topic for an online discussion forum. Your task is to write a short, single-paragraph submission (2-3 sentences). Make it sound like a real, informal user post. Vary the phrasing and tone slightly. Do not use hashtags or overly formal language."
-    user_prompt = f"The topic I'm thinking about is: '{topic}'"
+    system_prompt = "You are a person interested in debating intellectual topics, visiting an online discussion forum. Your task is to write a short submission (1 or 2 sentences) for a discussion topic. These submissions will be private and anonymous, but used to decide on duscussion topics for the entire forum. Make it sound like a real, informal user post. Vary the phrasing and tone slightly. Do not use hashtags or overly formal language. Text before BEGIN_POST represents your own private thoughts. You should express you thoughts after BEGIN_POST as if you were telling someone, unprompted, about an idea you are interested in discussing."
+    user_prompt = f"The topic I'm thinking about is: '{topic}' BEGIN_POST"
 
     try:
         response = openai.chat.completions.create(
@@ -97,7 +105,7 @@ def get_llm_generated_submission(topic):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            temperature=1.3, # A little more creativity
+            temperature=1.4, # A little more creativity
             max_tokens=100
         )
         return response.choices[0].message.content.strip()
@@ -167,7 +175,6 @@ def generate_and_submit():
 
                 # 8. Log the generated submission for review
                 generated_submissions_log.append({
-                    'topic': topic,
                     'username': username,
                     'uid': uid,
                     'submission_id': submission_ref.id,

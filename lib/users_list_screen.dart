@@ -79,14 +79,14 @@ class _UsersListScreenState extends State<UsersListScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (context) => const CreateGroupScreen()),
           );
         },
-        child: const Icon(Icons.group_add),
-        tooltip: 'Create Group',
+        icon: const Icon(Icons.group_add),
+        label: const Text('Create New Chat'),
       ),
     );
   }
