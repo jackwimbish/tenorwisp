@@ -11,6 +11,19 @@ class SubmissionScreen extends StatefulWidget {
 
 class _SubmissionScreenState extends State<SubmissionScreen> {
   final SubmissionService _submissionService = SubmissionService();
+  Map<String, dynamic>? _optimisticSubmissionData;
+
+  void _onSubmissionCreated(Map<String, dynamic> newSubmission) {
+    setState(() {
+      _optimisticSubmissionData = newSubmission;
+    });
+  }
+
+  void _onSubmissionWithdrawn() {
+    setState(() {
+      _optimisticSubmissionData = null;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -23,28 +36,39 @@ class _SubmissionScreenState extends State<SubmissionScreen> {
       body: StreamBuilder<DocumentSnapshot>(
         stream: _submissionService.userDocStream,
         builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
+          if (snapshot.connectionState == ConnectionState.waiting &&
+              _optimisticSubmissionData == null) {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData ||
               snapshot.hasError ||
               snapshot.data?.data() == null) {
+            // Use optimistic data if available during an error state
+            if (_optimisticSubmissionData != null) {
+              return ActiveSubmissionView(
+                submissionService: _submissionService,
+                initialData: _optimisticSubmissionData,
+                onWithdrawn: _onSubmissionWithdrawn,
+              );
+            }
             return const Center(child: Text("Could not load user data."));
           }
 
           final userData = snapshot.data!.data() as Map<String, dynamic>;
-          final liveSubmissionId = userData.containsKey('live_submission_id')
-              ? userData['live_submission_id']
-              : null;
+          final liveSubmissionId =
+              userData['live_submission_id'] as String? ?? '';
 
-          if (liveSubmissionId == null) {
+          if (liveSubmissionId.isEmpty && _optimisticSubmissionData == null) {
             return SubmissionCreationForm(
               submissionService: _submissionService,
+              onSubmissionCreated: _onSubmissionCreated,
             );
           } else {
             return ActiveSubmissionView(
               submissionId: liveSubmissionId,
               submissionService: _submissionService,
+              initialData: _optimisticSubmissionData,
+              onWithdrawn: _onSubmissionWithdrawn,
             );
           }
         },
@@ -55,8 +79,13 @@ class _SubmissionScreenState extends State<SubmissionScreen> {
 
 class SubmissionCreationForm extends StatefulWidget {
   final SubmissionService submissionService;
+  final Function(Map<String, dynamic>) onSubmissionCreated;
 
-  const SubmissionCreationForm({super.key, required this.submissionService});
+  const SubmissionCreationForm({
+    super.key,
+    required this.submissionService,
+    required this.onSubmissionCreated,
+  });
 
   @override
   State<SubmissionCreationForm> createState() => _SubmissionCreationFormState();
@@ -73,15 +102,22 @@ class _SubmissionCreationFormState extends State<SubmissionCreationForm> {
   }
 
   Future<void> _submit() async {
+    if (_submissionController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter an idea to submit.')),
+      );
+      return;
+    }
     setState(() {
       _isLoading = true;
     });
 
     try {
-      await widget.submissionService.submitIdea(
+      final newSubmission = await widget.submissionService.submitIdea(
         _submissionController.text.trim(),
       );
       if (!mounted) return;
+      widget.onSubmissionCreated(newSubmission);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Your submission has been received!')),
       );
@@ -90,12 +126,6 @@ class _SubmissionCreationFormState extends State<SubmissionCreationForm> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('An error occurred: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
   }
 
@@ -144,13 +174,17 @@ class _SubmissionCreationFormState extends State<SubmissionCreationForm> {
 }
 
 class ActiveSubmissionView extends StatefulWidget {
-  final String submissionId;
+  final String? submissionId;
   final SubmissionService submissionService;
+  final Map<String, dynamic>? initialData;
+  final VoidCallback onWithdrawn;
 
   const ActiveSubmissionView({
     super.key,
-    required this.submissionId,
+    this.submissionId,
     required this.submissionService,
+    this.initialData,
+    required this.onWithdrawn,
   });
 
   @override
@@ -161,15 +195,20 @@ class _ActiveSubmissionViewState extends State<ActiveSubmissionView> {
   bool _isLoading = false;
 
   Future<void> _withdraw() async {
+    final submissionIdToWithdraw =
+        widget.submissionId ?? widget.initialData?['id'];
+    if (submissionIdToWithdraw == null) return;
+
     setState(() {
       _isLoading = true;
     });
 
     try {
       await widget.submissionService.withdrawActiveSubmission(
-        widget.submissionId,
+        submissionIdToWithdraw,
       );
       if (!mounted) return;
+      widget.onWithdrawn();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Your submission has been withdrawn.')),
       );
@@ -178,72 +217,85 @@ class _ActiveSubmissionViewState extends State<ActiveSubmissionView> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('An error occurred while withdrawing: $e')),
       );
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
-      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.submissionId == null || widget.submissionId!.isEmpty) {
+      if (widget.initialData != null) {
+        return _buildContent(widget.initialData!);
+      }
+      return const Center(child: Text("Loading submission..."));
+    }
+
     return StreamBuilder<DocumentSnapshot>(
-      stream: widget.submissionService.getSubmissionStream(widget.submissionId),
+      stream: widget.submissionService.getSubmissionStream(
+        widget.submissionId!,
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
+          if (widget.initialData != null) {
+            return _buildContent(widget.initialData!);
+          }
           return const Center(child: CircularProgressIndicator());
         }
         if (!snapshot.hasData || snapshot.hasError || !snapshot.data!.exists) {
           return const Center(
-            child: Text(
-              "Could not load your submission. It may have been withdrawn.",
+            child: Padding(
+              padding: EdgeInsets.all(16.0),
+              child: Text(
+                "Could not load your submission. It may have been withdrawn.",
+                textAlign: TextAlign.center,
+              ),
             ),
           );
         }
 
         final submissionData = snapshot.data!.data() as Map<String, dynamic>;
-        final submissionText = submissionData['submissionText'];
-
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                "Your Active Submission:",
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 16),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Text(
-                    submissionText,
-                    style: Theme.of(context).textTheme.bodyLarge,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextButton.icon(
-                onPressed: _isLoading ? null : _withdraw,
-                icon: _isLoading
-                    ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.delete_outline, size: 20),
-                label: const Text('Withdraw Submission'),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.error,
-                ),
-              ),
-            ],
-          ),
-        );
+        return _buildContent(submissionData);
       },
+    );
+  }
+
+  Widget _buildContent(Map<String, dynamic> submissionData) {
+    final submissionText = submissionData['submissionText'];
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "Your Active Submission:",
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Text(
+                submissionText,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          TextButton.icon(
+            onPressed: _isLoading ? null : _withdraw,
+            icon: _isLoading
+                ? const SizedBox(
+                    height: 16,
+                    width: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.delete_outline, size: 20),
+            label: const Text('Withdraw Submission'),
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

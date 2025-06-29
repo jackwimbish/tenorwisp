@@ -65,8 +65,13 @@ service cloud.firestore {
     // This new block is added from the Phase 2 implementation plan.
     match /submissions/{submissionId} {
       allow create: if request.auth.uid == request.resource.data.author_uid;
-      allow read, update: if request.auth.uid == resource.data.author_uid
-                          && resource.data.status == 'live';
+      // Allow read/update if the user's profile points to this submission,
+      // OR if the submission was created within the last 5 seconds (using the
+      // client's timestamp to avoid race conditions with server timestamps).
+      allow read, update: if request.auth.uid == resource.data.author_uid && (
+                            (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.live_submission_id == submissionId) ||
+                            (request.time < resource.data.clientCreatedAt + duration.value(5, 's'))
+                          );
       allow delete: if false;
     }
 
