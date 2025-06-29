@@ -69,6 +69,10 @@ class UserService {
     return _firestore.collection('users').doc(userId).snapshots();
   }
 
+  Future<DocumentSnapshot> getUserDocFuture(String userId) {
+    return _firestore.collection('users').doc(userId).get();
+  }
+
   Stream<List<DocumentSnapshot>> getUsersStream(List<String> userIds) {
     if (userIds.isEmpty) return Stream.value([]);
     return _firestore

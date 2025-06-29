@@ -1,90 +1,134 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:tenorwisp/services/chat_service.dart';
+import 'package:tenorwisp/chat_screen.dart';
+import 'package:tenorwisp/service_locator.dart';
 import 'package:tenorwisp/services/user_service.dart';
-import 'chat_screen.dart';
+import 'package:tenorwisp/services/chat_service.dart';
+import 'package:tenorwisp/services/auth_service.dart';
+import 'package:tenorwisp/create_group_screen.dart';
 
 class UsersListScreen extends StatefulWidget {
   const UsersListScreen({super.key});
 
   @override
-  State<UsersListScreen> createState() => _UsersListScreenState();
+  _UsersListScreenState createState() => _UsersListScreenState();
 }
 
 class _UsersListScreenState extends State<UsersListScreen> {
-  final _userService = UserService();
-  final _chatService = ChatService();
+  late AuthService _authService;
+  late ChatService _chatService;
+  late UserService _userService;
+  Stream<QuerySnapshot>? _chatsStream;
 
-  Future<void> _navigateToChat(String recipientId) async {
-    try {
-      final chatId = await _chatService.getOrCreateChat(recipientId);
-      if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) =>
-                ChatScreen(chatId: chatId, recipientId: recipientId),
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open chat: ${e.toString()}')),
-        );
-      }
+  @override
+  void initState() {
+    super.initState();
+    _authService = getIt<AuthService>();
+    _chatService = getIt<ChatService>();
+    _userService = getIt<UserService>();
+    if (_userService.currentUser != null) {
+      _chatsStream = _chatService.getChatsStream(_userService.currentUser!.uid);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('New Message')),
-      body: StreamBuilder<DocumentSnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('users')
-            .doc(_userService.currentUser?.uid)
-            .snapshots(),
+      appBar: AppBar(title: const Text("Messages")),
+      body: StreamBuilder<QuerySnapshot>(
+        stream: _chatsStream,
         builder: (context, snapshot) {
-          if (!snapshot.hasData) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
-
-          final userData = snapshot.data!.data() as Map<String, dynamic>;
-          final friendIds =
-              (userData['friends'] as List<dynamic>?)?.cast<String>() ?? [];
-
-          if (friendIds.isEmpty) {
-            return const Center(
-              child: Text('You have no friends to message. Add some!'),
-            );
+          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+            return const Center(child: Text("You have no active chats."));
           }
 
-          return StreamBuilder<List<DocumentSnapshot>>(
-            stream: _userService.getUsersStream(friendIds),
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              final friends = snapshot.data!;
-              return ListView.builder(
-                itemCount: friends.length,
-                itemBuilder: (context, index) {
-                  final friendDoc = friends[index];
-                  final friendData = friendDoc.data() as Map<String, dynamic>;
-                  final username = friendData['username'] ?? 'No Username';
-                  final friendId = friendDoc.id;
+          final chats = snapshot.data!.docs;
 
-                  return ListTile(
-                    title: Text(username),
-                    onTap: () => _navigateToChat(friendId),
-                  );
-                },
-              );
+          return ListView.builder(
+            itemCount: chats.length,
+            itemBuilder: (context, index) {
+              final chatDoc = chats[index];
+              final chatData = chatDoc.data() as Map<String, dynamic>;
+              final chatId = chatDoc.id;
+
+              final isGroupChat = chatData['isGroupChat'] ?? false;
+
+              if (isGroupChat) {
+                return ListTile(
+                  leading: CircleAvatar(
+                    child: Text(chatData['groupName']?[0] ?? 'G'),
+                  ),
+                  title: Text(chatData['groupName'] ?? 'Group Chat'),
+                  subtitle: Text(chatData['lastMessage'] ?? ''),
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => ChatScreen(chatId: chatId),
+                      ),
+                    );
+                  },
+                );
+              } else {
+                return _buildOneToOneChatTile(chatData, chatId);
+              }
             },
           );
         },
       ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => const CreateGroupScreen()),
+          );
+        },
+        child: const Icon(Icons.group_add),
+        tooltip: 'Create Group',
+      ),
+    );
+  }
+
+  Widget _buildOneToOneChatTile(Map<String, dynamic> chatData, String chatId) {
+    final List<String> participants = List<String>.from(
+      chatData['participants'],
+    );
+    final otherUserId = participants.firstWhere(
+      (id) => id != _userService.currentUser!.uid,
+      orElse: () => '',
+    );
+
+    if (otherUserId.isEmpty) {
+      return const ListTile(title: Text("Error: Could not find other user."));
+    }
+
+    return FutureBuilder<DocumentSnapshot>(
+      future: _userService.getUserDocFuture(otherUserId),
+      builder: (context, userSnapshot) {
+        if (!userSnapshot.hasData) {
+          return const ListTile(title: Text("Loading..."));
+        }
+        final otherUserData =
+            userSnapshot.data?.data() as Map<String, dynamic>?;
+        return ListTile(
+          leading: CircleAvatar(
+            child: Text(otherUserData?['username']?[0] ?? 'U'),
+          ),
+          title: Text(otherUserData?['username'] ?? 'User'),
+          subtitle: Text(chatData['lastMessage'] ?? ''),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) =>
+                    ChatScreen(chatId: chatId, recipientId: otherUserId),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -7,16 +7,13 @@ import 'package:tenorwisp/service_locator.dart';
 import 'package:tenorwisp/services/chat_service.dart';
 import 'package:tenorwisp/services/media_service.dart';
 import 'package:tenorwisp/chat_bubble.dart';
+import 'package:tenorwisp/services/user_service.dart';
 
 class ChatScreen extends StatefulWidget {
   final String chatId;
-  final String recipientId;
+  final String? recipientId;
 
-  const ChatScreen({
-    super.key,
-    required this.chatId,
-    required this.recipientId,
-  });
+  const ChatScreen({super.key, required this.chatId, this.recipientId});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -26,9 +23,50 @@ class _ChatScreenState extends State<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ChatService _chatService = getIt<ChatService>();
   final MediaService _mediaService = getIt<MediaService>();
+  final UserService _userService = getIt<UserService>();
   final User? _currentUser = FirebaseAuth.instance.currentUser;
+  Map<String, String> _participantsUsernames = {};
+  bool _isGroupChat = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchChatInfo();
+  }
+
+  Future<void> _fetchChatInfo() async {
+    final chatDoc = await FirebaseFirestore.instance
+        .collection('chats')
+        .doc(widget.chatId)
+        .get();
+
+    if (chatDoc.exists) {
+      final chatData = chatDoc.data() as Map<String, dynamic>;
+      final isGroup = chatData['isGroupChat'] ?? false;
+      setState(() {
+        _isGroupChat = isGroup;
+      });
+
+      if (isGroup) {
+        final List<String> participantIds = List<String>.from(
+          chatData['participants'],
+        );
+        final users = await _userService.getUsersStream(participantIds).first;
+        final Map<String, String> usernames = {
+          for (var user in users)
+            user.id:
+                (user.data() as Map<String, dynamic>)['username'] as String? ??
+                'User',
+        };
+        setState(() {
+          _participantsUsernames = usernames;
+        });
+      }
+    }
+  }
 
   Future<void> _pickAndSendMedia() async {
+    final mediaService = getIt<MediaService>();
     final source = await showModalBottomSheet<String>(
       context: context,
       builder: (context) => SafeArea(
@@ -78,7 +116,11 @@ class _ChatScreenState extends State<ChatScreen> {
     }
     _messageController.clear();
     try {
-      await _chatService.sendMessage(widget.chatId, text: messageText);
+      await _chatService.sendMessage(
+        widget.chatId,
+        text: messageText,
+        senderUsername: _currentUser?.displayName,
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -91,7 +133,41 @@ class _ChatScreenState extends State<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Chat')),
+      appBar: AppBar(
+        title: StreamBuilder<DocumentSnapshot>(
+          stream: FirebaseFirestore.instance
+              .collection('chats')
+              .doc(widget.chatId)
+              .snapshots(),
+          builder: (context, chatSnapshot) {
+            if (!chatSnapshot.hasData) {
+              return const Text('Loading...');
+            }
+            final chatData = chatSnapshot.data!.data() as Map<String, dynamic>;
+            final isGroupChat = chatData['isGroupChat'] ?? false;
+
+            if (isGroupChat) {
+              return Text(chatData['groupName'] ?? 'Group Chat');
+            } else {
+              // For 1-on-1 chats, we need to fetch the other user's name
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(widget.recipientId)
+                    .get(),
+                builder: (context, userSnapshot) {
+                  if (!userSnapshot.hasData) {
+                    return const Text('Loading...');
+                  }
+                  final userData =
+                      userSnapshot.data!.data() as Map<String, dynamic>;
+                  return Text(userData['username'] ?? 'Chat');
+                },
+              );
+            }
+          },
+        ),
+      ),
       body: Column(
         children: [
           Expanded(child: _buildMessageList()),
@@ -124,10 +200,18 @@ class _ChatScreenState extends State<ChatScreen> {
             final message = messageDoc.data() as Map<String, dynamic>;
             final bool isMe = message['senderId'] == _currentUser?.uid;
 
+            // For group chats, add the sender's username to the data map
+            if (_isGroupChat && !isMe) {
+              final senderId = message['senderId'];
+              message['senderUsername'] =
+                  _participantsUsernames[senderId] ?? 'User';
+            }
+
             return ChatBubble(
               key: ValueKey(messageDoc.id),
               data: message,
               isMe: isMe,
+              isGroupChat: _isGroupChat,
             );
           },
         );

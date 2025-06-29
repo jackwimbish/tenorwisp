@@ -4,8 +4,14 @@ import 'package:tenorwisp/widgets/video_player_widget.dart';
 class ChatBubble extends StatefulWidget {
   final Map<String, dynamic> data;
   final bool isMe;
+  final bool isGroupChat;
 
-  const ChatBubble({super.key, required this.data, required this.isMe});
+  const ChatBubble({
+    super.key,
+    required this.data,
+    required this.isMe,
+    this.isGroupChat = false,
+  });
 
   @override
   State<ChatBubble> createState() => _ChatBubbleState();
@@ -66,8 +72,8 @@ class _ChatBubbleState extends State<ChatBubble> {
       text ?? '',
       style: TextStyle(
         color: widget.isMe
-            ? theme.colorScheme.onPrimary
-            : theme.colorScheme.onSecondary,
+            ? Theme.of(context).colorScheme.onPrimary
+            : Theme.of(context).colorScheme.onSecondary,
       ),
     );
   }
@@ -110,7 +116,24 @@ class _ChatBubbleState extends State<ChatBubble> {
               : theme.colorScheme.secondary,
           borderRadius: BorderRadius.circular(16),
         ),
-        child: _buildContent(theme),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (widget.isGroupChat && !widget.isMe) ...[
+              Text(
+                widget.data['senderUsername'] ?? 'User',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.onSecondary,
+                  fontSize: 12,
+                ),
+              ),
+              const SizedBox(height: 4),
+            ],
+            _buildContent(theme),
+          ],
+        ),
       ),
     );
   }

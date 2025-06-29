@@ -40,10 +40,15 @@ class ChatService {
   }
 
   // Use a transaction to send a message and update the parent chat doc
-  Future<void> sendMessage(String chatId, {String? text}) async {
+  Future<void> sendMessage(
+    String chatId, {
+    String? text,
+    String? senderUsername,
+  }) async {
     final currentUser = _firebaseAuth.currentUser!;
     final message = {
       'senderId': currentUser.uid,
+      'senderUsername': senderUsername,
       'timestamp': FieldValue.serverTimestamp(),
       'viewed': false,
       'expiresAt': null,
@@ -182,7 +187,42 @@ class ChatService {
         .snapshots();
   }
 
+  Stream<QuerySnapshot> getChatsStream(String userId) {
+    return _firestore
+        .collection('chats')
+        .where('participants', arrayContains: userId)
+        .orderBy('lastMessageTimestamp', descending: true)
+        .snapshots();
+  }
+
   Future<void> createChatWith(String otherUserId) async {
     // ... existing code ...
+  }
+
+  Future<String> createGroupChat(
+    String groupName,
+    List<String> friendIds,
+  ) async {
+    final currentUser = _firebaseAuth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not logged in.');
+    }
+
+    // Add the current user to the list of participants
+    final participants = [currentUser.uid, ...friendIds];
+
+    // Create a new chat document with a unique ID
+    final chatDocRef = _firestore.collection('chats').doc();
+
+    await chatDocRef.set({
+      'participants': participants,
+      'isGroupChat': true,
+      'groupName': groupName,
+      'createdBy': currentUser.uid,
+      'lastMessage': 'Group created',
+      'lastMessageTimestamp': FieldValue.serverTimestamp(),
+    });
+
+    return chatDocRef.id;
   }
 }
