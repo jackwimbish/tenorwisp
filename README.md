@@ -9,7 +9,34 @@ The project features a hybrid backend architecture, using **Firebase** for real-
 
 ## How to Build and Run
 
-### 1. Configure Firebase
+### 1. Environment Variables
+
+Before running any part of the application, create a file named `.env` in the root of the project. This file stores the necessary secrets and configuration settings. You can use the following as a template:
+
+```
+# --- Firebase Admin SDK Authentication ---
+# Choose ONE method. Path is recommended for local dev.
+GOOGLE_APPLICATION_CREDENTIALS="/path/to/your/serviceAccountKey.json"
+FIREBASE_SERVICE_ACCOUNT_JSON=""
+
+# --- Firebase Frontend Configuration ---
+# Used by the script to generate platform-specific config files.
+GOOGLE_SERVICES_API_KEY="your_base64_encoded_google_services_api_key_here"
+
+# --- OpenAI API Key ---
+# Used by the backend and data generation scripts.
+OPENAI_API_KEY="sk-..."
+
+# --- Backend Security ---
+# A secret key shared between the backend and the trigger script.
+BACKEND_SECRET_KEY="a_very_strong_and_secret_key"
+
+# --- Local Development & Testing ---
+# Set to "true" to target your local server with trigger_generation.py
+USE_DEV_SERVER="true"
+```
+
+### 2. Configure Firebase
 
 Before you can build the app, you need to configure its connection to Firebase. This involves creating a `.env` file with your secret Google Services API key.
 
@@ -35,7 +62,7 @@ Before you can build the app, you need to configure its connection to Firebase. 
     ./scripts/configure_firebase.sh
     ```
 
-### 2. Run the Flutter App (Frontend)
+### 3. Run the Flutter App (Frontend)
 
 Once Firebase is configured, you can run the Flutter application.
 If you don't already have it installed, you'll need the Flutter CLI: On mac: `brew install flutter` or use the [official installation](https://docs.flutter.dev/get-started/install)
@@ -55,25 +82,55 @@ Then you can proceed with the following:
     ```
     Alternatively, you can run the app directly from your IDE (like VS Code or Android Studio) if you have the Flutter plugin installed.
 
-### 3. Run the Backend
+### 4. Run the Backend (Python AI Service)
 
-The backend service currently deployed on Railway, so there is no need to run it locally to test the app. If you still want to run it locally:
+The backend service is responsible for all AI-powered analysis and content generation. While it's deployed on Railway for production use, you can run it locally for development and testing.
 
-Set up a virtualenv and install Python libraries:
-`python -m venv venv`
-`source venv/bin/activate`
-`pip install -r backend/requirements.txt`
+1.  **Set up the Python Environment:**
+    Navigate to the project's root directory. Create a virtual environment and install the required Python libraries from the `requirements.txt` file.
 
-Then to run a local development server:
-`uvicorn backend.main:app`
+    ```sh
+    # Create and activate the virtual environment
+    python3 -m venv backend/venv
+    source backend/venv/bin/activate
+    
+    # Install dependencies
+    pip install -r backend/requirements.txt
+    ```
+    *Note: You only need to create the virtual environment once.*
 
-In different terminal window, to test the AI topic generation functionality you can do the following:
+2.  **Run the Local Development Server:**
+    Once your environment is set up and activated, you can start the local FastAPI server using Uvicorn.
 
-Clear the current threads and proposed topic submissions (optional)
-`python clear_generated_data.py`
+    ```sh
+    uvicorn backend.main:app --reload
+    ```
+    The `--reload` flag enables hot-reloading, so the server will restart automatically when you make changes to the code.
 
-Generate and submit some fake topic ideas for the users:
-`python generate_submissions.py`
+### 5. Test the AI Content Pipeline
 
-Now you can trigger the AI thread generation process:
-`python trigger_generation.py`
+With the backend server running, you can use the provided Python scripts to test the entire content generation pipeline from your terminal.
+
+1.  **Clear Existing Data (Optional):**
+    This script removes all previously generated submissions and public threads from Firestore, giving you a clean slate.
+
+    ```sh
+    python clear_generated_data.py
+    ```
+
+2.  **Generate Fake Submissions:**
+    This script populates your database with realistic, clustered topic ideas from your fake users.
+
+    ```sh
+    python generate_submissions.py
+    ```
+
+3.  **Trigger AI Topic Generation:**
+    This script makes a secure API call to your backend (either local or deployed) to start the analysis and generate the new public discussion threads.
+    
+    ```sh
+    python trigger_generation.py
+    ```
+    *Note: To target your local server, set the `USE_DEV_SERVER` environment variable (e.g., `export USE_DEV_SERVER=true`). To target the deployed production server on Railway, make sure this variable is unset.*
+
+    After running this, you should see the new threads appear in the app.
