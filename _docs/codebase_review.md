@@ -36,6 +36,7 @@ The project utilizes a **hybrid backend architecture**, using the right tool for
     -   `get_it`: For dependency injection (service locator pattern).
     -   `image_picker`: For selecting images and videos from the user's device.
     -   `video_player`, `chewie`, & `flutter_cache_manager`: For robust in-app video playback.
+    -   `flutter_svg`: For rendering SVG images, ensuring user profile pictures display correctly.
     -   (Backend) `fastapi`, `uvicorn`, `python-dotenv`, `firebase-admin`, `openai`, `sentence-transformers`, `hdbscan`, `numpy`: For the Python AI service.
 
 -   **Key Directories & Files:**
@@ -52,6 +53,12 @@ The project utilizes a **hybrid backend architecture**, using the right tool for
 
 The application is now a functional prototype with a sophisticated, dual-backend architecture.
 
+-   **Live Public Discussion UI:** The placeholder UI for the public discussion feature has been replaced with a fully functional, live, and interactive implementation.
+    -   **Real-Time Thread Display:** The `PublicThreadsScreen` now uses a `StreamBuilder` to listen to the `public_threads` collection, displaying a live list of all AI-generated discussions.
+    -   **Interactive Thread Detail:** The `ThreadDetailScreen` provides a complete chat-like experience. It uses a `StreamBuilder` to display all posts in a thread in real-time and includes a text input field for users to submit their own comments.
+    -   **Polished Post Widget:** A new, reusable `PostBubble` widget has been created to give the discussion threads a polished look. It intelligently distinguishes between AI-generated "starter" posts and regular user comments, applying unique styling and avatars to each.
+    -   **Robust SVG Support:** The `PostBubble` widget was enhanced to correctly render user avatars in SVG format (from DiceBear) by adding the `flutter_svg` package and implementing a robust URL parsing check.
+
 -   **Service-Oriented Refactoring:** Core features like real-time chat and user submissions have been refactored to use a service-oriented architecture, significantly improving code quality.
     -   **Dependency Injection:** The `get_it` package was introduced as a service locator to manage dependencies, decoupling UI components from the services they consume.
     -   **Centralized Business Logic:** All direct Firestore calls have been moved out of the widgets and into dedicated service classes (e.g., `ChatService`, `SubmissionService`). This makes the logic reusable, testable, and easier to maintain.
@@ -60,12 +67,12 @@ The application is now a functional prototype with a sophisticated, dual-backend
 -   **User Submission & Status Flow:** A complete, secure, and user-friendly flow has been implemented for the AI discussion platform.
     -   **Dynamic UI:** A new `SubmissionScreen` allows users to submit, view, and withdraw their topic ideas. The UI dynamically adapts, showing a submission form or the user's active submission status.
     -   **Atomic Operations:** Firestore batched writes are used to guarantee data consistency when creating or withdrawing a submission, ensuring the `submissions` and `users` collections are always in sync.
-    -   **Integrated Security:** The `firestore.rules` have been successfully merged to support this new functionality without compromising the security of the existing chat and friend features.
+    -   **Integrated Security:** The `firestore.rules` have been successfully merged and updated to support all app features, including secure access to the new `posts` sub-collection.
 
 -   **Functional AI-Powered Content Pipeline:** The core of the AI discussion platform is now fully implemented. The backend service on Railway can be triggered to perform the complete, end-to-end content generation process.
     -   **Data Fetching & Analysis:** The system correctly fetches all "live" user submissions from Firestore, converts them into vectors, and uses HDBSCAN to identify the most prominent thematic clusters.
     -   **AI Content Generation:** For the top clusters, the service uses the OpenAI API (GPT-4.1) to generate a high-quality, open-ended discussion title and a compelling initial post to start the conversation.
-    -   **Atomic Publishing & Archiving:** The system uses Firestore batched writes to atomically publish the new thread and its starter post while simultaneously archiving all the processed user submissions and clearing the user's `live_submission_id`, ensuring data consistency.
+    -   **Atomic Publishing & Archiving:** The system uses Firestore batched writes to atomically publish the new thread and its starter post while simultaneously archiving all the processed user submissions and clearing the user's `live_submission_id`, ensuring data consistency. A fix was implemented to ensure the correct `createdAt` and `generatedAt` timestamps are included, which is critical for frontend queries.
 
 -   **Robust Testing & Seeding Workflow:** A suite of Python scripts has been created and refined to enable rapid and reliable testing of the entire application loop.
     -   **Consistent Data Seeding:** `create_fake_users.py` and `generate_submissions.py` work in tandem to populate the database with realistic, correctly-structured test data.
