@@ -148,4 +148,39 @@ class UserService {
 
     await batch.commit();
   }
+
+  Future<List<QueryDocumentSnapshot>> searchUsers(String query) async {
+    if (query.isEmpty) {
+      return [];
+    }
+
+    // Query by username
+    final usernameQuery = _firestore
+        .collection('users')
+        .where('username', isEqualTo: query)
+        .get();
+
+    // Query by email
+    final emailQuery = _firestore
+        .collection('users')
+        .where('email', isEqualTo: query)
+        .get();
+
+    // Wait for both queries to complete
+    final results = await Future.wait([usernameQuery, emailQuery]);
+
+    final usernameDocs = results[0].docs;
+    final emailDocs = results[1].docs;
+
+    // Combine and deduplicate results
+    final combinedDocs = <String, QueryDocumentSnapshot>{};
+    for (var doc in usernameDocs) {
+      combinedDocs[doc.id] = doc;
+    }
+    for (var doc in emailDocs) {
+      combinedDocs[doc.id] = doc;
+    }
+
+    return combinedDocs.values.toList();
+  }
 }
